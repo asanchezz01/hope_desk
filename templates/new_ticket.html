@@ -4,18 +4,30 @@
 <div class="card">
   <div class="card-body">
     <form method="post">
+      {% if can_create_for_client %}
       <div class="mb-3">
-        <label class="form-label">Título</label>
+        <label class="form-label">Cliente</label>
+        <select class="form-select" name="client_id" required>
+          <option value="">Selecione...</option>
+          {% for client in clients %}
+            <option value="{{ client.id }}">{{ client.name }} ({{ client.email }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="mb-3">
+        <label class="form-label">Titulo</label>
         <input class="form-control" type="text" name="title" required>
       </div>
       <div class="mb-3">
-        <label class="form-label">Descrição</label>
+        <label class="form-label">Descricao</label>
         <textarea class="form-control" name="description" rows="4" required></textarea>
       </div>
       <div class="mb-3">
-        <label class="form-label">Técnico responsável (opcional)</label>
+        <label class="form-label">Tecnico responsavel (opcional)</label>
         <select class="form-select" name="technician_id">
-          <option value="">Não atribuído</option>
+          <option value="">Nao atribuido</option>
           {% for tech in technicians %}
             <option value="{{ tech.id }}">{{ tech.name }}</option>
           {% endfor %}

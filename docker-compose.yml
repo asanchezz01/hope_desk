@@ -1,7 +1,13 @@
 services:
-  web:
+  hopedesk:
     build: .
     ports:
       - "5000:5000"
     volumes:
       - .:/app
+    networks:
+      - newhope
+
+networks:
+      newhope: 
+      external: true

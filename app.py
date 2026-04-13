@@ -283,31 +283,70 @@ def dashboard():
 
 @app.route("/tickets/new", methods=["GET", "POST"])
 @login_required
-@role_required("client")
 def new_ticket():
     technicians = User.query.filter_by(role="technician").all()
+    clients = User.query.filter_by(role="client").order_by(User.name.asc()).all()
+    role = session.get("role")
+    is_super = session.get("is_superuser", False)
+    can_create_for_client = role == "technician" or is_super
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
         technician_id = request.form.get("technician_id")
+        client_id_raw = request.form.get("client_id")
 
         if not title or not description:
-            flash("Título e descrição são obrigatórios.", "danger")
+            flash("Titulo e descricao sao obrigatorios.", "danger")
             return redirect(url_for("new_ticket"))
+
+        if can_create_for_client:
+            if not client_id_raw:
+                flash("Selecione um cliente para abrir o chamado.", "danger")
+                return redirect(url_for("new_ticket"))
+            try:
+                client_id = int(client_id_raw)
+            except (TypeError, ValueError):
+                flash("Cliente invalido.", "danger")
+                return redirect(url_for("new_ticket"))
+
+            client = User.query.filter_by(id=client_id, role="client").first()
+            if not client:
+                flash("Cliente invalido.", "danger")
+                return redirect(url_for("new_ticket"))
+        else:
+            client_id = session["user_id"]
+
+        technician_assigned_id = None
+        if technician_id:
+            try:
+                technician_assigned_id = int(technician_id)
+            except (TypeError, ValueError):
+                flash("Tecnico invalido.", "danger")
+                return redirect(url_for("new_ticket"))
+
+            technician_exists = User.query.filter_by(id=technician_assigned_id, role="technician").first()
+            if not technician_exists:
+                flash("Tecnico invalido.", "danger")
+                return redirect(url_for("new_ticket"))
 
         ticket = Ticket(
             title=title,
             description=description,
-            client_id=session["user_id"],
-            technician_id=int(technician_id) if technician_id else None,
+            client_id=client_id,
+            technician_id=technician_assigned_id,
         )
         db.session.add(ticket)
         db.session.commit()
         flash("Chamado criado com sucesso.", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template("new_ticket.html", technicians=technicians)
+    return render_template(
+        "new_ticket.html",
+        technicians=technicians,
+        clients=clients,
+        can_create_for_client=can_create_for_client,
+    )
 
 
 @app.route("/tickets/<int:ticket_id>", methods=["GET", "POST"])

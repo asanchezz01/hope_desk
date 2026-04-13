@@ -6,7 +6,7 @@
     {% if role == 'technician' or session.get('is_superuser') %}
       <a href="{{ url_for('manage_users') }}" class="btn btn-secondary me-2">Gerenciar Usuários</a>
     {% endif %}
-    {% if role == 'client' %}
+    {% if role == 'client' or role == 'technician' or session.get('is_superuser') %}
       <a href="{{ url_for('new_ticket') }}" class="btn btn-primary">Novo chamado</a>
     {% endif %}
   </div>
