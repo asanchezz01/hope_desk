@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1 class="h3 mb-3">Novo chamado</h1>
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Título</label>
+        <input class="form-control" type="text" name="title" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Descrição</label>
+        <textarea class="form-control" name="description" rows="4" required></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Técnico responsável (opcional)</label>
+        <select class="form-select" name="technician_id">
+          <option value="">Não atribuído</option>
+          {% for tech in technicians %}
+            <option value="{{ tech.id }}">{{ tech.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">Abrir chamado</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

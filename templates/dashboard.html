@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="h3 mb-0">Chamados</h1>
+  {% if role == 'client' %}
+    <a href="{{ url_for('new_ticket') }}" class="btn btn-primary">Novo chamado</a>
+  {% endif %}
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Título</th>
+        <th>Status</th>
+        <th>Cliente</th>
+        <th>Técnico</th>
+        <th>Horas</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ticket in tickets %}
+      <tr>
+        <td>#{{ ticket.id }}</td>
+        <td>{{ ticket.title }}</td>
+        <td>{{ ticket.status }}</td>
+        <td>{{ ticket.client.name }}</td>
+        <td>{{ ticket.technician.name if ticket.technician else '-' }}</td>
+        <td>{{ ticket.total_hours }}</td>
+        <td><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">Detalhes</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center">Nenhum chamado encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

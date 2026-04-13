@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Chamado #{{ ticket.id }}</h1>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <h2 class="h5">{{ ticket.title }}</h2>
+    <p>{{ ticket.description }}</p>
+    <p class="mb-1"><strong>Status:</strong> {{ ticket.status }}</p>
+    <p class="mb-1"><strong>Cliente:</strong> {{ ticket.client.name }}</p>
+    <p class="mb-1"><strong>Técnico:</strong> {{ ticket.technician.name if ticket.technician else '-' }}</p>
+    <p class="mb-0"><strong>Horas totais:</strong> {{ ticket.total_hours }}</p>
+  </div>
+</div>
+
+{% if role == 'technician' %}
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h3 class="h6">Atualizar status</h3>
+        <form method="post">
+          <input type="hidden" name="action" value="status">
+          <select class="form-select mb-3" name="status">
+            <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
+            <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em andamento</option>
+            <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
+            <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
+          </select>
+          <button class="btn btn-warning w-100" type="submit">Salvar status</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-8">
+    <div class="card h-100">
+      <div class="card-body">
+        <h3 class="h6">Registrar atividade</h3>
+        <form method="post">
+          <input type="hidden" name="action" value="activity">
+          <div class="mb-3">
+            <label class="form-label">Atividade realizada</label>
+            <textarea class="form-control" name="notes" rows="3" required></textarea>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Início</label>
+              <input class="form-control" type="datetime-local" name="started_at" required>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Fim</label>
+              <input class="form-control" type="datetime-local" name="ended_at" required>
+            </div>
+          </div>
+          <button class="btn btn-success" type="submit">Salvar atividade</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body">
+    <h3 class="h6">Histórico de atividades</h3>
+    <ul class="list-group list-group-flush">
+      {% for act in ticket.activities %}
+      <li class="list-group-item">
+        <div><strong>{{ act.created_by.name }}</strong> - {{ act.notes }}</div>
+        <small class="text-muted">
+          {{ act.started_at.strftime('%d/%m/%Y %H:%M') }} até {{ act.ended_at.strftime('%d/%m/%Y %H:%M') }}
+          ({{ '%.2f'|format(act.duration_hours) }} h)
+        </small>
+      </li>
+      {% else %}
+      <li class="list-group-item text-muted">Nenhuma atividade registrada.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}
