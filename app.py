@@ -4,6 +4,10 @@ from functools import wraps
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-this-in-production"
@@ -19,6 +23,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # client | technician
+    is_superuser = db.Column(db.Boolean, default=False)
 
     client_tickets = db.relationship(
         "Ticket", foreign_keys="Ticket.client_id", backref="client", lazy=True
@@ -61,6 +66,44 @@ class Activity(db.Model):
         return max(delta.total_seconds() / 3600, 0)
 
 
+def ensure_superuser() -> str:
+    superuser_email = "superuser@hope.com"
+    superuser_password = os.getenv("SUPERUSER_PASSWORD", "newhope")
+
+    if not superuser_password:
+        return "SUPERUSER_PASSWORD vazio. Superuser não foi criado."
+
+    user = User.query.filter_by(email=superuser_email).first()
+    if not user:
+        user = User(
+            name="Super User",
+            email=superuser_email,
+            password_hash=generate_password_hash(superuser_password),
+            role="technician",
+            is_superuser=True,
+        )
+        db.session.add(user)
+        db.session.commit()
+        return "Superuser criado."
+
+    updated = False
+    if user.role != "technician":
+        user.role = "technician"
+        updated = True
+    if not user.is_superuser:
+        user.is_superuser = True
+        updated = True
+    if not check_password_hash(user.password_hash, superuser_password):
+        user.password_hash = generate_password_hash(superuser_password)
+        updated = True
+
+    if updated:
+        db.session.commit()
+        return "Superuser atualizado."
+
+    return "Superuser já existente."
+
+
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -76,7 +119,9 @@ def role_required(*roles):
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            if session.get("role") not in roles:
+            user_role = session.get("role")
+            is_super = session.get("is_superuser", False)
+            if user_role not in roles and not is_super:
                 flash("Você não tem permissão para acessar esta página.", "danger")
                 return redirect(url_for("dashboard"))
             return f(*args, **kwargs)
@@ -93,8 +138,11 @@ def home():
     return redirect(url_for("login"))
 
 
+@app.route("/users", methods=["GET", "POST"])
 @app.route("/register", methods=["GET", "POST"])
-def register():
+@login_required
+@role_required("technician")
+def manage_users():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -103,15 +151,15 @@ def register():
 
         if role not in {"client", "technician"}:
             flash("Perfil inválido.", "danger")
-            return redirect(url_for("register"))
+            return redirect(url_for("manage_users"))
 
         if not name or not email or not password:
             flash("Preencha todos os campos.", "danger")
-            return redirect(url_for("register"))
+            return redirect(url_for("manage_users"))
 
         if User.query.filter_by(email=email).first():
             flash("E-mail já cadastrado.", "warning")
-            return redirect(url_for("register"))
+            return redirect(url_for("manage_users"))
 
         user = User(
             name=name,
@@ -121,10 +169,72 @@ def register():
         )
         db.session.add(user)
         db.session.commit()
-        flash("Usuário cadastrado com sucesso. Faça login.", "success")
-        return redirect(url_for("login"))
+        flash("Usuário cadastrado com sucesso.", "success")
+        return redirect(url_for("manage_users"))
 
-    return render_template("register.html")
+    users = User.query.order_by(User.name.asc()).all()
+    return render_template("users.html", users=users)
+
+
+@app.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
+@login_required
+@role_required("technician")
+def edit_user(user_id: int):
+    user = User.query.get_or_404(user_id)
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        role = request.form.get("role", "client")
+        password = request.form.get("password", "")
+
+        if role not in {"client", "technician"}:
+            flash("Perfil inválido.", "danger")
+            return redirect(url_for("edit_user", user_id=user.id))
+
+        if not name or not email:
+            flash("Nome e e-mail são obrigatórios.", "danger")
+            return redirect(url_for("edit_user", user_id=user.id))
+
+        email_owner = User.query.filter_by(email=email).first()
+        if email_owner and email_owner.id != user.id:
+            flash("E-mail já cadastrado por outro usuário.", "warning")
+            return redirect(url_for("edit_user", user_id=user.id))
+
+        user.name = name
+        user.email = email
+        user.role = role
+
+        if password:
+            user.password_hash = generate_password_hash(password)
+
+        db.session.commit()
+        flash("Usuário atualizado com sucesso.", "success")
+        return redirect(url_for("manage_users"))
+
+    return render_template("edit_user.html", user=user)
+
+
+@app.route("/users/<int:user_id>/delete", methods=["POST"])
+@login_required
+@role_required("technician")
+def delete_user(user_id: int):
+    user = User.query.get_or_404(user_id)
+
+    if user.id == session.get("user_id"):
+        flash("Você não pode excluir o seu próprio usuário.", "danger")
+        return redirect(url_for("manage_users"))
+
+    has_tickets = bool(user.client_tickets or user.tech_tickets)
+    has_activities = Activity.query.filter_by(created_by_id=user.id).first() is not None
+    if has_tickets or has_activities:
+        flash("Não é possível excluir este usuário porque ele possui chamados ou atividades vinculadas.", "warning")
+        return redirect(url_for("manage_users"))
+
+    db.session.delete(user)
+    db.session.commit()
+    flash("Usuário excluído com sucesso.", "success")
+    return redirect(url_for("manage_users"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -141,6 +251,7 @@ def login():
         session["user_id"] = user.id
         session["user_name"] = user.name
         session["role"] = user.role
+        session["is_superuser"] = user.is_superuser
 
         flash("Login realizado com sucesso.", "success")
         return redirect(url_for("dashboard"))
@@ -258,10 +369,12 @@ def ticket_detail(ticket_id: int):
 @app.cli.command("init-db")
 def init_db() -> None:
     db.create_all()
-    print("Banco inicializado.")
+    result = ensure_superuser()
+    print(f"Banco inicializado. {result}")
 
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        print(ensure_superuser())
     app.run(host="0.0.0.0", port=5000, debug=True)

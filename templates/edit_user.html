@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h1 class="h4 mb-3">Editar usuário</h1>
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input class="form-control" type="text" name="name" value="{{ user.name }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">E-mail</label>
+            <input class="form-control" type="email" name="email" value="{{ user.email }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Perfil</label>
+            <select class="form-select" name="role" required>
+              <option value="client" {% if user.role == 'client' %}selected{% endif %}>Cliente</option>
+              <option value="technician" {% if user.role == 'technician' %}selected{% endif %}>Técnico</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nova senha (opcional)</label>
+            <input class="form-control" type="password" name="password">
+            <div class="form-text">Preencha apenas se quiser trocar a senha.</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Salvar alterações</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('manage_users') }}">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

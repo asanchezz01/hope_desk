@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="h3 mb-0">Gerenciar Usuários</h1>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Adicionar usuário</h2>
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input class="form-control" type="text" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">E-mail</label>
+            <input class="form-control" type="email" name="email" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Senha</label>
+            <input class="form-control" type="password" name="password" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Perfil</label>
+            <select class="form-select" name="role" required>
+              <option value="client">Cliente</option>
+              <option value="technician">Técnico</option>
+            </select>
+          </div>
+          <button class="btn btn-success w-100" type="submit">Adicionar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Usuários cadastrados</h2>
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Perfil</th>
+                <th class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for user in users %}
+              <tr>
+                <td>{{ user.name }}</td>
+                <td>
+                  {{ user.email }}
+                  {% if user.is_superuser %}
+                    <span class="badge text-bg-dark ms-1">Superuser</span>
+                  {% endif %}
+                </td>
+                <td>{{ 'Cliente' if user.role == 'client' else 'Técnico' }}</td>
+                <td class="text-end">
+                  <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-outline-primary btn-sm">Editar</a>
+                  <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Deseja realmente excluir este usuário?');">
+                    <button type="submit" class="btn btn-outline-danger btn-sm" {% if user.id == session.get('user_id') %}disabled{% endif %}>Excluir</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="text-center">Nenhum usuário cadastrado.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

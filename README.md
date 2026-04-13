@@ -25,6 +25,11 @@ python app.py
 
 Acesse: http://localhost:5000
 
+Usuário inicial (criado automaticamente ao iniciar o app):
+
+- E-mail: `superuser@hope.com`
+- Senha: valor de `SUPERUSER_PASSWORD` no arquivo `.env` (padrão: `newhope`)
+
 ## Executar com Docker
 
 ```bash
