@@ -272,13 +272,82 @@ def logout():
 def dashboard():
     user_id = session["user_id"]
     role = session["role"]
+    today = datetime.now()
+
+    year_raw = request.args.get("year", str(today.year))
+    month_raw = request.args.get("month", str(today.month))
+
+    try:
+        selected_year = int(year_raw)
+    except (TypeError, ValueError):
+        selected_year = today.year
+
+    try:
+        selected_month = int(month_raw)
+    except (TypeError, ValueError):
+        selected_month = today.month
+
+    if selected_month < 1 or selected_month > 12:
+        selected_month = today.month
 
     if role == "client":
-        tickets = Ticket.query.filter_by(client_id=user_id).order_by(Ticket.created_at.desc()).all()
+        scope_query = Ticket.query.filter_by(client_id=user_id)
     else:
-        tickets = Ticket.query.order_by(Ticket.created_at.desc()).all()
+        scope_query = Ticket.query
 
-    return render_template("dashboard.html", tickets=tickets, role=role)
+    year_expr = db.extract("year", Ticket.created_at)
+    month_expr = db.extract("month", Ticket.created_at)
+
+    year_rows = (
+        scope_query.with_entities(year_expr.label("year"))
+        .distinct()
+        .order_by(year_expr.desc())
+        .all()
+    )
+    available_years = [int(year_row[0]) for year_row in year_rows if year_row[0] is not None]
+    if today.year not in available_years:
+        available_years.insert(0, today.year)
+
+    tickets = (
+        scope_query.filter(year_expr == selected_year, month_expr == selected_month)
+        .order_by(Ticket.created_at.desc())
+        .all()
+    )
+    total_hours_sum = round(sum(ticket.total_hours for ticket in tickets), 2)
+
+    months = [
+        (1, "Janeiro"),
+        (2, "Fevereiro"),
+        (3, "Março"),
+        (4, "Abril"),
+        (5, "Maio"),
+        (6, "Junho"),
+        (7, "Julho"),
+        (8, "Agosto"),
+        (9, "Setembro"),
+        (10, "Outubro"),
+        (11, "Novembro"),
+        (12, "Dezembro"),
+    ]
+
+    status_meta = {
+        "aberto": {"label": "Em aberto", "class": "status-open"},
+        "em_andamento": {"label": "Em andamento", "class": "status-progress"},
+        "resolvido": {"label": "Concluído", "class": "status-done"},
+        "fechado": {"label": "Fechado", "class": "status-done"},
+    }
+
+    return render_template(
+        "dashboard.html",
+        tickets=tickets,
+        role=role,
+        months=months,
+        selected_month=selected_month,
+        available_years=available_years,
+        selected_year=selected_year,
+        status_meta=status_meta,
+        total_hours_sum=total_hours_sum,
+    )
 
 
 @app.route("/tickets/new", methods=["GET", "POST"])

@@ -9,5 +9,5 @@ services:
       - newhope
 
 networks:
-      newhope: 
-      external: true
+  newhope:
+    external: true

@@ -12,6 +12,37 @@
   </div>
 </div>
 
+<form method="get" class="card p-3 mb-3 border-0 shadow-sm">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-4">
+      <label for="month" class="form-label mb-1">Mês</label>
+      <select id="month" name="month" class="form-select">
+        {% for month_value, month_name in months %}
+          <option value="{{ month_value }}" {% if selected_month == month_value %}selected{% endif %}>{{ month_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-3">
+      <label for="year" class="form-label mb-1">Ano</label>
+      <select id="year" name="year" class="form-select">
+        {% for year in available_years %}
+          <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>{{ year }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-auto">
+      <button type="submit" class="btn btn-outline-primary">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="card p-3 mb-3 border-0 shadow-sm">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="text-muted">Total de horas (chamados filtrados)</span>
+    <strong class="h5 mb-0">{{ '%.2f'|format(total_hours_sum) }} h</strong>
+  </div>
+</div>
+
 <div class="table-responsive">
   <table class="table table-striped align-middle">
     <thead>
@@ -30,7 +61,12 @@
       <tr>
         <td>#{{ ticket.id }}</td>
         <td>{{ ticket.title }}</td>
-        <td>{{ ticket.status }}</td>
+        <td>
+          {% set meta = status_meta.get(ticket.status) %}
+          <span class="status-pill {{ meta['class'] if meta else 'status-unknown' }}">
+            {{ meta['label'] if meta else ticket.status.replace('_', ' ').title() }}
+          </span>
+        </td>
         <td>{{ ticket.client.name }}</td>
         <td>{{ ticket.technician.name if ticket.technician else '-' }}</td>
         <td>{{ ticket.total_hours }}</td>
