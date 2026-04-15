@@ -31,5 +31,40 @@
 
   {% block content %}{% endblock %}
 </div>
+<script>
+  (function () {
+    function lockForm(form) {
+      if (form.dataset.submitting === "true") {
+        return false;
+      }
+
+      form.dataset.submitting = "true";
+
+      var submitControls = form.querySelectorAll(
+        'button[type="submit"], input[type="submit"]'
+      );
+      submitControls.forEach(function (control) {
+        control.disabled = true;
+      });
+
+      return true;
+    }
+
+    document.addEventListener(
+      "submit",
+      function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+
+        if (!lockForm(form)) {
+          event.preventDefault();
+        }
+      },
+      true
+    );
+  })();
+</script>
 </body>
 </html>

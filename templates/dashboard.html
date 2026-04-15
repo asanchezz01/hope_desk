@@ -53,7 +53,7 @@
         <th>Cliente</th>
         <th>Técnico</th>
         <th>Horas</th>
-        <th></th>
+        <th>Ações</th>
       </tr>
     </thead>
     <tbody>
@@ -70,7 +70,14 @@
         <td>{{ ticket.client.name }}</td>
         <td>{{ ticket.technician.name if ticket.technician else '-' }}</td>
         <td>{{ ticket.total_hours }}</td>
-        <td><a class="btn btn-outline-secondary btn-sm" href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">Detalhes</a></td>
+        <td>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">Detalhes</a>
+          {% if role == 'technician' or session.get('is_superuser') %}
+          <form method="post" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" class="d-inline" onsubmit="return confirm('Deseja realmente excluir este chamado?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Excluir</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="7" class="text-center">Nenhum chamado encontrado.</td></tr>

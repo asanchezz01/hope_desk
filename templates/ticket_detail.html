@@ -2,7 +2,14 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">Chamado #{{ ticket.id }}</h1>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+  <div class="d-flex gap-2">
+    {% if role == 'technician' or session.get('is_superuser') %}
+    <form method="post" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" onsubmit="return confirm('Deseja realmente excluir este chamado?');">
+      <button type="submit" class="btn btn-outline-danger">Excluir chamado</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+  </div>
 </div>
 
 <div class="card mb-3">
@@ -69,11 +76,20 @@
     <ul class="list-group list-group-flush">
       {% for act in ticket.activities %}
       <li class="list-group-item">
-        <div><strong>{{ act.created_by.name }}</strong> - {{ act.notes }}</div>
-        <small class="text-muted">
-          {{ act.started_at.strftime('%d/%m/%Y %H:%M') }} até {{ act.ended_at.strftime('%d/%m/%Y %H:%M') }}
-          ({{ '%.2f'|format(act.duration_hours) }} h)
-        </small>
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+          <div>
+            <div><strong>{{ act.created_by.name }}</strong> - {{ act.notes }}</div>
+            <small class="text-muted">
+              {{ act.started_at.strftime('%d/%m/%Y %H:%M') }} até {{ act.ended_at.strftime('%d/%m/%Y %H:%M') }}
+              ({{ '%.2f'|format(act.duration_hours) }} h)
+            </small>
+          </div>
+          {% if role == 'technician' or session.get('is_superuser') %}
+          <form method="post" action="{{ url_for('delete_activity', ticket_id=ticket.id, activity_id=act.id) }}" onsubmit="return confirm('Deseja realmente excluir esta atividade?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Excluir atividade</button>
+          </form>
+          {% endif %}
+        </div>
       </li>
       {% else %}
       <li class="list-group-item text-muted">Nenhuma atividade registrada.</li>

@@ -152,6 +152,12 @@ def role_required(*roles):
     return decorator
 
 
+def can_delete_by_month(record_date: datetime, is_superuser: bool) -> bool:
+    now = datetime.now()
+    is_current_month = record_date.year == now.year and record_date.month == now.month
+    return is_current_month or is_superuser
+
+
 def parse_bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -605,6 +611,49 @@ def ticket_detail(ticket_id: int):
         return redirect(url_for("ticket_detail", ticket_id=ticket.id))
 
     return render_template("ticket_detail.html", ticket=ticket, role=role)
+
+
+@app.route("/tickets/<int:ticket_id>/delete", methods=["POST"])
+@login_required
+@role_required("technician")
+def delete_ticket(ticket_id: int):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    is_super = session.get("is_superuser", False)
+
+    if not can_delete_by_month(ticket.created_at, is_super):
+        flash(
+            "Somente chamados do mês corrente podem ser excluídos. "
+            "Para meses anteriores, apenas superuser pode excluir.",
+            "danger",
+        )
+        return redirect(url_for("dashboard"))
+
+    db.session.delete(ticket)
+    db.session.commit()
+    flash("Chamado excluído com sucesso.", "success")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/tickets/<int:ticket_id>/activities/<int:activity_id>/delete", methods=["POST"])
+@login_required
+@role_required("technician")
+def delete_activity(ticket_id: int, activity_id: int):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    activity = Activity.query.filter_by(id=activity_id, ticket_id=ticket.id).first_or_404()
+    is_super = session.get("is_superuser", False)
+
+    if not can_delete_by_month(activity.started_at, is_super):
+        flash(
+            "Somente atividades do mês corrente podem ser excluídas. "
+            "Para meses anteriores, apenas superuser pode excluir.",
+            "danger",
+        )
+        return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+    db.session.delete(activity)
+    db.session.commit()
+    flash("Atividade excluída com sucesso.", "success")
+    return redirect(url_for("ticket_detail", ticket_id=ticket.id))
 
 
 @app.cli.command("init-db")
