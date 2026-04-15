@@ -1,18 +1,39 @@
 from datetime import datetime
 from functools import wraps
+from email.message import EmailMessage
+import smtplib
+import ssl
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
+from urllib.parse import quote_plus
 import os
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-this-in-production"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///chamados.db"
+
+
+def build_database_uri() -> str:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        return database_url
+
+    db_host = os.getenv("DB_HOST", "10.1.4.82").strip()
+    db_port = os.getenv("DB_PORT", "5433").strip()
+    db_name = os.getenv("DB_NAME", "hopedesk").strip()
+    db_user = quote_plus(os.getenv("DB_USER", "postgres").strip())
+    db_password = quote_plus(os.getenv("DB_PASSWORD", "postgres").strip())
+
+    return f"postgresql+psycopg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = build_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 
 db = SQLAlchemy(app)
 
@@ -129,6 +150,113 @@ def role_required(*roles):
         return wrapper
 
     return decorator
+
+
+def parse_bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def send_email(recipients: list[str], subject: str, body: str) -> bool:
+    smtp_host = os.getenv("MAIL_SMTP", "").strip()
+    smtp_user = os.getenv("MAIL_USER", "").strip()
+    smtp_pass = os.getenv("MAIL_PASS", "").strip()
+    smtp_port = int(os.getenv("MAIL_PORT", "587"))
+    smtp_use_tls = parse_bool_env("MAIL_USE_TLS", True)
+    smtp_from = os.getenv("MAIL_FROM", smtp_user).strip()
+
+    if not smtp_host or not smtp_user or not smtp_pass or not smtp_from:
+        app.logger.warning("SMTP não configurado. E-mail não enviado.")
+        return False
+
+    if not recipients:
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = smtp_from
+    msg["To"] = ", ".join(recipients)
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+            server.ehlo()
+            if smtp_use_tls:
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        return True
+    except Exception:
+        app.logger.exception("Falha ao enviar e-mail para %s", recipients)
+        return False
+
+
+def notify_technicians_new_ticket(ticket: "Ticket") -> bool:
+    recipients: list[str] = []
+
+    # Quando o chamado possui técnico designado, notifica apenas esse técnico.
+    if ticket.technician_id:
+        assigned_tech = User.query.filter_by(id=ticket.technician_id, role="technician").first()
+        if assigned_tech and assigned_tech.email:
+            recipients = [assigned_tech.email]
+    else:
+        # Sem técnico designado: notifica todos os técnicos, exceto superuser.
+        technicians = User.query.filter_by(role="technician").all()
+        recipients = sorted(
+            {user.email for user in technicians if user.email and not user.is_superuser}
+        )
+
+    if not recipients:
+        return False
+
+    body = (
+        "Novo chamado recebido no Hope Desk.\n\n"
+        f"Chamado #{ticket.id}\n"
+        f"Titulo: {ticket.title}\n"
+        f"Cliente: {ticket.client.name}\n"
+        f"Descricao:\n{ticket.description}\n\n"
+        "Acesse o sistema para atendimento."
+    )
+    subject = f"[Hope Desk] Novo chamado #{ticket.id}: {ticket.title}"
+    return send_email(recipients, subject, body)
+
+
+def notify_client_status_changed(ticket: "Ticket", old_status: str, new_status: str) -> bool:
+    if not ticket.client or not ticket.client.email:
+        return False
+
+    body = (
+        "O status do seu chamado foi atualizado.\n\n"
+        f"Chamado #{ticket.id}\n"
+        f"Titulo: {ticket.title}\n"
+        f"Status anterior: {old_status}\n"
+        f"Novo status: {new_status}\n\n"
+        "Acesse o sistema para acompanhar."
+    )
+    subject = f"[Hope Desk] Atualizacao de status do chamado #{ticket.id}"
+    return send_email([ticket.client.email], subject, body)
+
+
+def notify_client_new_activity(ticket: "Ticket", activity: "Activity") -> bool:
+    if not ticket.client or not ticket.client.email:
+        return False
+
+    technician_name = activity.created_by.name if activity.created_by else "Tecnico"
+    body = (
+        "Uma nova tarefa/atividade foi registrada no seu chamado.\n\n"
+        f"Chamado #{ticket.id}\n"
+        f"Titulo: {ticket.title}\n"
+        f"Tecnico: {technician_name}\n"
+        f"Inicio: {activity.started_at.strftime('%d/%m/%Y %H:%M')}\n"
+        f"Fim: {activity.ended_at.strftime('%d/%m/%Y %H:%M')}\n"
+        f"Descricao da atividade:\n{activity.notes}\n\n"
+        "Acesse o sistema para acompanhar."
+    )
+    subject = f"[Hope Desk] Nova tarefa no chamado #{ticket.id}"
+    return send_email([ticket.client.email], subject, body)
 
 
 @app.route("/")
@@ -407,6 +535,7 @@ def new_ticket():
         )
         db.session.add(ticket)
         db.session.commit()
+        notify_technicians_new_ticket(ticket)
         flash("Chamado criado com sucesso.", "success")
         return redirect(url_for("dashboard"))
 
@@ -436,8 +565,11 @@ def ticket_detail(ticket_id: int):
             if new_status not in valid:
                 flash("Status inválido.", "danger")
             else:
+                old_status = ticket.status
                 ticket.status = new_status
                 db.session.commit()
+                if old_status != new_status:
+                    notify_client_status_changed(ticket, old_status, new_status)
                 flash("Status atualizado.", "success")
 
         elif action == "activity":
@@ -467,6 +599,7 @@ def ticket_detail(ticket_id: int):
             )
             db.session.add(activity)
             db.session.commit()
+            notify_client_new_activity(ticket, activity)
             flash("Atividade registrada.", "success")
 
         return redirect(url_for("ticket_detail", ticket_id=ticket.id))

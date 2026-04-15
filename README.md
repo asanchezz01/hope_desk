@@ -11,7 +11,7 @@ Sistema web simples em Python (Flask) para registro e acompanhamento de chamados
 - Registro de atividades por técnico com data/hora de início e fim
 - Cálculo automático de horas trabalhadas por chamado
 - Interface responsiva com Bootstrap
-- Banco embarcado SQLite
+- Banco PostgreSQL
 - Deploy via Docker
 
 ## Executar localmente
@@ -30,15 +30,42 @@ Usuário inicial (criado automaticamente ao iniciar o app):
 - E-mail: `superuser@hope.com`
 - Senha: valor de `SUPERUSER_PASSWORD` no arquivo `.env` (padrão: `newhope`)
 
+Configurações de e-mail no `.env`:
+
+- `MAIL_SMTP` (ex.: `smtp.gmail.com`)
+- `MAIL_PORT` (ex.: `587`)
+- `MAIL_USER`
+- `MAIL_PASS`
+- `MAIL_FROM`
+- `MAIL_USE_TLS` (`true` ou `false`)
+
+Configurações de banco no `.env`:
+
+- `DB_HOST` (padrão: `10.1.4.82`)
+- `DB_PORT` (padrão: `5433`)
+- `DB_NAME` (padrão: `hopedesk`)
+- `DB_USER` (padrão: `postgres`)
+- `DB_PASSWORD` (padrão: `postgres`)
+- Opcional: `DATABASE_URL` (se informado, tem prioridade sobre as variáveis acima)
+
 ## Executar com Docker
 
 ```bash
 docker compose up --build
 ```
 
+## Carga inicial do banco (produção)
+
+Depois de configurar o `.env` no servidor, execute:
+
+```bash
+python scripts/carga_producao.py
+```
+
+Esse script cria as tabelas no PostgreSQL e garante a criação/atualização do superusuário inicial.
+
 ## Observações
 
-- Banco local em `chamados.db` (SQLite).
 - Para produção, altere `SECRET_KEY` em `app.py`.
 
 
