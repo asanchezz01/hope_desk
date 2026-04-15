@@ -33,12 +33,33 @@
 </div>
 <script>
   (function () {
-    function lockForm(form) {
+    function showLoadingState(submitter) {
+      if (!submitter) {
+        return;
+      }
+
+      if (submitter.tagName === "BUTTON") {
+        if (!submitter.dataset.originalHtml) {
+          submitter.dataset.originalHtml = submitter.innerHTML;
+        }
+        submitter.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processando...';
+      } else if (submitter.tagName === "INPUT" && submitter.type === "submit") {
+        if (!submitter.dataset.originalValue) {
+          submitter.dataset.originalValue = submitter.value;
+        }
+        submitter.value = "Processando...";
+      }
+    }
+
+    function lockForm(form, submitter) {
       if (form.dataset.submitting === "true") {
         return false;
       }
 
       form.dataset.submitting = "true";
+      form.setAttribute("aria-busy", "true");
+      showLoadingState(submitter);
 
       var submitControls = form.querySelectorAll(
         'button[type="submit"], input[type="submit"]'
@@ -53,16 +74,19 @@
     document.addEventListener(
       "submit",
       function (event) {
+        if (event.defaultPrevented) {
+          return;
+        }
+
         var form = event.target;
         if (!(form instanceof HTMLFormElement)) {
           return;
         }
 
-        if (!lockForm(form)) {
+        if (!lockForm(form, event.submitter)) {
           event.preventDefault();
         }
-      },
-      true
+      }
     );
   })();
 </script>
