@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Editar chamado #{{ ticket.id }}</h1>
+  <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Cliente</label>
+        <select class="form-select" name="client_id" required>
+          {% for client in clients %}
+            <option value="{{ client.id }}" {% if ticket.client_id == client.id %}selected{% endif %}>
+              {{ client.name }} ({{ client.email }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Titulo</label>
+        <input class="form-control" type="text" name="title" value="{{ ticket.title }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Descricao</label>
+        <textarea class="form-control" name="description" rows="4" required>{{ ticket.description }}</textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Tecnico responsavel (opcional)</label>
+        <select class="form-select" name="technician_id">
+          <option value="">Nao atribuido</option>
+          {% for tech in technicians %}
+            <option value="{{ tech.id }}" {% if ticket.technician_id == tech.id %}selected{% endif %}>
+              {{ tech.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status" required>
+          <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
+          <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em andamento</option>
+          <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
+          <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Salvar alteracoes</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
