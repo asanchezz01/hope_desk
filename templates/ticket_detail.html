@@ -84,11 +84,16 @@
               ({{ '%.2f'|format(act.duration_hours) }} h)
             </small>
           </div>
-          {% if role == 'technician' or session.get('is_superuser') %}
-          <form method="post" action="{{ url_for('delete_activity', ticket_id=ticket.id, activity_id=act.id) }}" onsubmit="return confirm('Deseja realmente excluir esta atividade?');">
-            <button type="submit" class="btn btn-outline-danger btn-sm">Excluir atividade</button>
-          </form>
-          {% endif %}
+          <div class="d-flex gap-2">
+            {% if role == 'technician' and act.created_by_id == session.get('user_id') %}
+            <a href="{{ url_for('edit_activity', ticket_id=ticket.id, activity_id=act.id) }}" class="btn btn-outline-primary btn-sm">Editar atividade</a>
+            {% endif %}
+            {% if role == 'technician' or session.get('is_superuser') %}
+            <form method="post" action="{{ url_for('delete_activity', ticket_id=ticket.id, activity_id=act.id) }}" onsubmit="return confirm('Deseja realmente excluir esta atividade?');">
+              <button type="submit" class="btn btn-outline-danger btn-sm">Excluir atividade</button>
+            </form>
+            {% endif %}
+          </div>
         </div>
       </li>
       {% else %}

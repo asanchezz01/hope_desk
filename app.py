@@ -265,6 +265,33 @@ def notify_client_new_activity(ticket: "Ticket", activity: "Activity") -> bool:
     return send_email([ticket.client.email], subject, body)
 
 
+def find_activity_conflict(
+    technician_id: int,
+    started_at: datetime,
+    ended_at: datetime,
+    exclude_activity_id: int | None = None,
+) -> Activity | None:
+    query = Activity.query.filter(
+        Activity.created_by_id == technician_id,
+        Activity.started_at < ended_at,
+        Activity.ended_at > started_at,
+    )
+    if exclude_activity_id is not None:
+        query = query.filter(Activity.id != exclude_activity_id)
+    return query.order_by(Activity.started_at.asc()).first()
+
+
+def validate_activity_period(started_at: datetime, ended_at: datetime) -> str | None:
+    if ended_at <= started_at:
+        return "A data/hora de término deve ser posterior à data/hora de início."
+
+    duration_hours = (ended_at - started_at).total_seconds() / 3600
+    if duration_hours > 12:
+        return "A duração da atividade não pode ser superior a 12 horas."
+
+    return None
+
+
 @app.route("/")
 def home():
     if "user_id" in session:
@@ -586,14 +613,31 @@ def ticket_detail(ticket_id: int):
             try:
                 started_at = datetime.fromisoformat(started_at_raw)
                 ended_at = datetime.fromisoformat(ended_at_raw)
-                if ended_at <= started_at:
-                    raise ValueError("Fim deve ser maior que início")
             except ValueError:
                 flash("Datas inválidas. Use data e hora válidas.", "danger")
                 return redirect(url_for("ticket_detail", ticket_id=ticket.id))
 
+            period_error = validate_activity_period(started_at, ended_at)
+            if period_error:
+                flash(period_error, "danger")
+                return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
             if not notes:
                 flash("Descreva a atividade.", "danger")
+                return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+            conflict = find_activity_conflict(
+                technician_id=session["user_id"],
+                started_at=started_at,
+                ended_at=ended_at,
+            )
+            if conflict:
+                flash(
+                    "Conflito de horário: já existe uma atividade sua nesse período "
+                    f"({conflict.started_at.strftime('%d/%m/%Y %H:%M')} "
+                    f"até {conflict.ended_at.strftime('%d/%m/%Y %H:%M')}).",
+                    "danger",
+                )
                 return redirect(url_for("ticket_detail", ticket_id=ticket.id))
 
             activity = Activity(
@@ -654,6 +698,72 @@ def delete_activity(ticket_id: int, activity_id: int):
     db.session.commit()
     flash("Atividade excluída com sucesso.", "success")
     return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+
+@app.route("/tickets/<int:ticket_id>/activities/<int:activity_id>/edit", methods=["GET", "POST"])
+@login_required
+@role_required("technician")
+def edit_activity(ticket_id: int, activity_id: int):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    activity = Activity.query.filter_by(id=activity_id, ticket_id=ticket.id).first_or_404()
+    current_user_id = session.get("user_id")
+
+    if activity.created_by_id != current_user_id:
+        flash("Você só pode editar atividades lançadas por você.", "danger")
+        return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+    if request.method == "POST":
+        notes = request.form.get("notes", "").strip()
+        started_at_raw = request.form.get("started_at", "")
+        ended_at_raw = request.form.get("ended_at", "")
+
+        try:
+            started_at = datetime.fromisoformat(started_at_raw)
+            ended_at = datetime.fromisoformat(ended_at_raw)
+        except ValueError:
+            flash("Datas inválidas. Use data e hora válidas.", "danger")
+            return redirect(
+                url_for("edit_activity", ticket_id=ticket.id, activity_id=activity.id)
+            )
+
+        period_error = validate_activity_period(started_at, ended_at)
+        if period_error:
+            flash(period_error, "danger")
+            return redirect(
+                url_for("edit_activity", ticket_id=ticket.id, activity_id=activity.id)
+            )
+
+        if not notes:
+            flash("Descreva a atividade.", "danger")
+            return redirect(
+                url_for("edit_activity", ticket_id=ticket.id, activity_id=activity.id)
+            )
+
+        conflict = find_activity_conflict(
+            technician_id=current_user_id,
+            started_at=started_at,
+            ended_at=ended_at,
+            exclude_activity_id=activity.id,
+        )
+        if conflict:
+            flash(
+                "Conflito de horário: já existe uma atividade sua nesse período "
+                f"({conflict.started_at.strftime('%d/%m/%Y %H:%M')} "
+                f"até {conflict.ended_at.strftime('%d/%m/%Y %H:%M')}).",
+                "danger",
+            )
+            return redirect(
+                url_for("edit_activity", ticket_id=ticket.id, activity_id=activity.id)
+            )
+
+        activity.notes = notes
+        activity.started_at = started_at
+        activity.ended_at = ended_at
+        db.session.commit()
+        flash("Atividade atualizada com sucesso.", "success")
+        return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+    return render_template("edit_activity.html", ticket=ticket, activity=activity)
 
 
 @app.cli.command("init-db")
