@@ -580,6 +580,76 @@ def new_ticket():
     )
 
 
+@app.route("/tickets/<int:ticket_id>/edit", methods=["GET", "POST"])
+@login_required
+@role_required("technician")
+def edit_ticket(ticket_id: int):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    technicians = User.query.filter_by(role="technician").order_by(User.name.asc()).all()
+    clients = User.query.filter_by(role="client").order_by(User.name.asc()).all()
+    valid_status = {"aberto", "em_andamento", "resolvido", "fechado"}
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        status = request.form.get("status", "").strip()
+        client_id_raw = request.form.get("client_id", "").strip()
+        technician_id_raw = request.form.get("technician_id", "").strip()
+
+        if not title or not description:
+            flash("Titulo e descricao sao obrigatorios.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        if status not in valid_status:
+            flash("Status invalido.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        try:
+            client_id = int(client_id_raw)
+        except (TypeError, ValueError):
+            flash("Cliente invalido.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        client = User.query.filter_by(id=client_id, role="client").first()
+        if not client:
+            flash("Cliente invalido.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        technician_id = None
+        if technician_id_raw:
+            try:
+                technician_id = int(technician_id_raw)
+            except (TypeError, ValueError):
+                flash("Tecnico invalido.", "danger")
+                return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+            technician_exists = User.query.filter_by(id=technician_id, role="technician").first()
+            if not technician_exists:
+                flash("Tecnico invalido.", "danger")
+                return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        old_status = ticket.status
+        ticket.title = title
+        ticket.description = description
+        ticket.status = status
+        ticket.client_id = client_id
+        ticket.technician_id = technician_id
+        db.session.commit()
+
+        if old_status != status:
+            notify_client_status_changed(ticket, old_status, status)
+
+        flash("Chamado atualizado com sucesso.", "success")
+        return redirect(url_for("ticket_detail", ticket_id=ticket.id))
+
+    return render_template(
+        "edit_ticket.html",
+        ticket=ticket,
+        technicians=technicians,
+        clients=clients,
+    )
+
+
 @app.route("/tickets/<int:ticket_id>", methods=["GET", "POST"])
 @login_required
 def ticket_detail(ticket_id: int):
