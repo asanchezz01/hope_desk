@@ -200,6 +200,10 @@ def send_email(recipients: list[str], subject: str, body: str) -> bool:
         return False
 
 
+def build_ticket_external_url(ticket_id: int) -> str:
+    return url_for("ticket_detail", ticket_id=ticket_id, _external=True)
+
+
 def notify_technicians_new_ticket(ticket: "Ticket") -> bool:
     recipients: list[str] = []
 
@@ -218,13 +222,14 @@ def notify_technicians_new_ticket(ticket: "Ticket") -> bool:
     if not recipients:
         return False
 
+    ticket_url = build_ticket_external_url(ticket.id)
     body = (
         "Novo chamado recebido no Hope Desk.\n\n"
         f"Chamado #{ticket.id}\n"
         f"Titulo: {ticket.title}\n"
         f"Cliente: {ticket.client.name}\n"
         f"Descricao:\n{ticket.description}\n\n"
-        "Acesse o sistema para atendimento."
+        f"Acesse o chamado diretamente: {ticket_url}"
     )
     subject = f"[Hope Desk] Novo chamado #{ticket.id}: {ticket.title}"
     return send_email(recipients, subject, body)
@@ -234,13 +239,14 @@ def notify_client_status_changed(ticket: "Ticket", old_status: str, new_status: 
     if not ticket.client or not ticket.client.email:
         return False
 
+    ticket_url = build_ticket_external_url(ticket.id)
     body = (
         "O status do seu chamado foi atualizado.\n\n"
         f"Chamado #{ticket.id}\n"
         f"Titulo: {ticket.title}\n"
         f"Status anterior: {old_status}\n"
         f"Novo status: {new_status}\n\n"
-        "Acesse o sistema para acompanhar."
+        f"Acesse o chamado diretamente: {ticket_url}"
     )
     subject = f"[Hope Desk] Atualizacao de status do chamado #{ticket.id}"
     return send_email([ticket.client.email], subject, body)
@@ -251,6 +257,7 @@ def notify_client_new_activity(ticket: "Ticket", activity: "Activity") -> bool:
         return False
 
     technician_name = activity.created_by.name if activity.created_by else "Tecnico"
+    ticket_url = build_ticket_external_url(ticket.id)
     body = (
         "Uma nova tarefa/atividade foi registrada no seu chamado.\n\n"
         f"Chamado #{ticket.id}\n"
@@ -259,7 +266,7 @@ def notify_client_new_activity(ticket: "Ticket", activity: "Activity") -> bool:
         f"Inicio: {activity.started_at.strftime('%d/%m/%Y %H:%M')}\n"
         f"Fim: {activity.ended_at.strftime('%d/%m/%Y %H:%M')}\n"
         f"Descricao da atividade:\n{activity.notes}\n\n"
-        "Acesse o sistema para acompanhar."
+        f"Acesse o chamado diretamente: {ticket_url}"
     )
     subject = f"[Hope Desk] Nova tarefa no chamado #{ticket.id}"
     return send_email([ticket.client.email], subject, body)
