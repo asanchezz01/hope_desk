@@ -55,11 +55,11 @@
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label">Início</label>
-              <input class="form-control" type="datetime-local" name="started_at" required>
+              <input class="form-control" type="datetime-local" name="started_at" id="activity-started-at" required>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Fim</label>
-              <input class="form-control" type="datetime-local" name="ended_at" required>
+              <input class="form-control" type="datetime-local" name="ended_at" id="activity-ended-at" required>
             </div>
           </div>
           <button class="btn btn-success" type="submit">Salvar atividade</button>
@@ -68,6 +68,82 @@
     </div>
   </div>
 </div>
+{% endif %}
+
+{% if role == 'technician' %}
+<script>
+  (function () {
+    var startInput = document.getElementById("activity-started-at");
+    var endInput = document.getElementById("activity-ended-at");
+    if (!startInput || !endInput) {
+      return;
+    }
+
+    function pad(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function formatDateTimeLocal(date) {
+      return (
+        date.getFullYear() +
+        "-" +
+        pad(date.getMonth() + 1) +
+        "-" +
+        pad(date.getDate()) +
+        "T" +
+        pad(date.getHours()) +
+        ":" +
+        pad(date.getMinutes())
+      );
+    }
+
+    function parseDateTimeLocal(value) {
+      var parts = value.split("T");
+      if (parts.length !== 2) {
+        return null;
+      }
+      var dateParts = parts[0].split("-");
+      var timeParts = parts[1].split(":");
+      if (dateParts.length !== 3 || timeParts.length < 2) {
+        return null;
+      }
+
+      var year = Number(dateParts[0]);
+      var month = Number(dateParts[1]) - 1;
+      var day = Number(dateParts[2]);
+      var hour = Number(timeParts[0]);
+      var minute = Number(timeParts[1]);
+
+      var date = new Date(year, month, day, hour, minute, 0, 0);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function setDefaultStartDate() {
+      if (startInput.value) {
+        return;
+      }
+      var now = new Date();
+      var start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      startInput.value = formatDateTimeLocal(start);
+    }
+
+    function fillEndFromStartIfBlank() {
+      if (!startInput.value || endInput.value) {
+        return;
+      }
+      var startDate = parseDateTimeLocal(startInput.value);
+      if (!startDate) {
+        return;
+      }
+      var endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+      endInput.value = formatDateTimeLocal(endDate);
+    }
+
+    setDefaultStartDate();
+    startInput.addEventListener("change", fillEndFromStartIfBlank);
+    startInput.addEventListener("blur", fillEndFromStartIfBlank);
+  })();
+</script>
 {% endif %}
 
 <div class="card">
