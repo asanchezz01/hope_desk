@@ -38,6 +38,7 @@ Configurações de e-mail no `.env`:
 - `MAIL_PASS`
 - `MAIL_FROM`
 - `MAIL_USE_TLS` (`true` ou `false`)
+- `MAIL_ENABLED` (`true` ou `false`) para habilitar/desabilitar todo envio de e-mails
 
 Configurações de banco no `.env`:
 

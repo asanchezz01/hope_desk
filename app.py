@@ -1,14 +1,23 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from email.message import EmailMessage
 import smtplib
 import ssl
+from io import BytesIO
+from pathlib import Path
+from urllib.parse import quote_plus
+from urllib.request import urlopen
 
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from werkzeug.security import check_password_hash, generate_password_hash
 from dotenv import load_dotenv
-from urllib.parse import quote_plus
 import os
 
 load_dotenv()
@@ -85,6 +94,155 @@ class Activity(db.Model):
     def duration_hours(self) -> float:
         delta = self.ended_at - self.started_at
         return max(delta.total_seconds() / 3600, 0)
+
+
+class SystemParameter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(120), nullable=False, unique=True)
+    value = db.Column(db.Text, nullable=False, default="")
+
+
+def ensure_system_parameters() -> None:
+    defaults = {
+        "company_logo": "",
+        "company_name": "Hope Desk",
+        "company_address": "Endereço não informado",
+    }
+    existing = {
+        row.key for row in SystemParameter.query.filter(SystemParameter.key.in_(defaults.keys())).all()
+    }
+    for key, value in defaults.items():
+        if key not in existing:
+            db.session.add(SystemParameter(key=key, value=value))
+    db.session.commit()
+
+
+def get_system_parameter(key: str, default: str = "") -> str:
+    record = SystemParameter.query.filter_by(key=key).first()
+    if not record or not record.value:
+        return default
+    return record.value.strip()
+
+
+def set_system_parameter(key: str, value: str) -> None:
+    record = SystemParameter.query.filter_by(key=key).first()
+    normalized = value.strip()
+    if record:
+        record.value = normalized
+        return
+    db.session.add(SystemParameter(key=key, value=normalized))
+
+
+def resolve_period(year_raw: str | None, month_raw: str | None) -> tuple[int, int]:
+    today = datetime.now()
+
+    try:
+        selected_year = int(year_raw or today.year)
+    except (TypeError, ValueError):
+        selected_year = today.year
+
+    try:
+        selected_month = int(month_raw or today.month)
+    except (TypeError, ValueError):
+        selected_month = today.month
+
+    if selected_month < 1 or selected_month > 12:
+        selected_month = today.month
+
+    return selected_year, selected_month
+
+
+def month_period_bounds(year: int, month: int) -> tuple[datetime, datetime]:
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+    return start, end
+
+
+def normalize_status(status: str) -> str:
+    labels = {
+        "aberto": "Em aberto",
+        "em_andamento": "Em andamento",
+        "resolvido": "Concluído",
+        "fechado": "Fechado",
+    }
+    return labels.get(status, status.replace("_", " ").title())
+
+
+def try_build_logo(parameter_value: str) -> Image | None:
+    logo_ref = parameter_value.strip()
+    if not logo_ref:
+        return None
+
+    try:
+        if logo_ref.startswith(("http://", "https://")):
+            with urlopen(logo_ref, timeout=8) as response:
+                logo_data = response.read()
+            reader = ImageReader(BytesIO(logo_data))
+            image = Image(reader, width=35 * mm, height=20 * mm)
+        else:
+            logo_path = Path(logo_ref)
+            if not logo_path.is_absolute():
+                logo_path = Path(app.root_path) / logo_path
+            if not logo_path.exists():
+                return None
+            image = Image(str(logo_path), width=35 * mm, height=20 * mm)
+        image.hAlign = "LEFT"
+        return image
+    except Exception:
+        app.logger.exception("Falha ao carregar logo do parâmetro company_logo.")
+        return None
+
+
+def build_services_report_rows(selected_year: int, selected_month: int, user_id: int, role: str) -> tuple[list[dict], float]:
+    period_start, period_end = month_period_bounds(selected_year, selected_month)
+    period_end_display = period_end - timedelta(seconds=1)
+    activity_scope = (
+        Activity.query.join(Ticket, Activity.ticket_id == Ticket.id)
+        .filter(Activity.ended_at > period_start, Activity.started_at < period_end)
+        .order_by(Activity.ended_at.desc())
+    )
+    if role == "client":
+        activity_scope = activity_scope.filter(Ticket.client_id == user_id)
+
+    activities = activity_scope.all()
+    grouped: dict[int, dict] = {}
+    for activity in activities:
+        ticket = activity.ticket
+        if not ticket:
+            continue
+
+        overlap_start = max(activity.started_at, period_start)
+        overlap_end = min(activity.ended_at, period_end)
+        overlap_hours = max((overlap_end - overlap_start).total_seconds() / 3600, 0)
+        if overlap_hours <= 0:
+            continue
+
+        activity_end_for_period = min(activity.ended_at, period_end_display)
+        row = grouped.get(ticket.id)
+        if row is None:
+            row = {
+                "ticket_id": ticket.id,
+                "last_activity_at": activity_end_for_period,
+                "title": ticket.title,
+                "status": normalize_status(ticket.status),
+                "client_name": ticket.client.name if ticket.client else "-",
+                "technician_name": ticket.technician.name if ticket.technician else "-",
+                "hours": 0.0,
+            }
+            grouped[ticket.id] = row
+
+        row["hours"] += overlap_hours
+        if activity_end_for_period > row["last_activity_at"]:
+            row["last_activity_at"] = activity_end_for_period
+
+    report_rows = sorted(grouped.values(), key=lambda item: item["last_activity_at"], reverse=True)
+    for row in report_rows:
+        row["hours"] = round(row["hours"], 2)
+    total_hours = round(sum(row["hours"] for row in report_rows), 2)
+    return report_rows, total_hours
 
 
 def ensure_superuser() -> str:
@@ -166,6 +324,11 @@ def parse_bool_env(name: str, default: bool = False) -> bool:
 
 
 def send_email(recipients: list[str], subject: str, body: str) -> bool:
+    mail_enabled = parse_bool_env("MAIL_ENABLED", True)
+    if not mail_enabled:
+        app.logger.info("Envio de e-mail desativado por MAIL_ENABLED=false.")
+        return False
+
     smtp_host = os.getenv("MAIL_SMTP", "").strip()
     smtp_user = os.getenv("MAIL_USER", "").strip()
     smtp_pass = os.getenv("MAIL_PASS", "").strip()
@@ -344,6 +507,43 @@ def manage_users():
     return render_template("users.html", users=users)
 
 
+@app.route("/admin/company-parameters", methods=["GET", "POST"])
+@login_required
+def manage_company_parameters():
+    if not session.get("is_superuser", False):
+        flash("Apenas superuser pode acessar esta página.", "danger")
+        return redirect(url_for("dashboard"))
+
+    ensure_system_parameters()
+
+    if request.method == "POST":
+        company_name = request.form.get("company_name", "").strip()
+        company_address = request.form.get("company_address", "").strip()
+        company_logo = request.form.get("company_logo", "").strip()
+
+        if not company_name:
+            flash("Informe o nome da empresa.", "danger")
+            return redirect(url_for("manage_company_parameters"))
+
+        if not company_address:
+            flash("Informe o endereço da empresa.", "danger")
+            return redirect(url_for("manage_company_parameters"))
+
+        set_system_parameter("company_name", company_name)
+        set_system_parameter("company_address", company_address)
+        set_system_parameter("company_logo", company_logo)
+        db.session.commit()
+        flash("Parâmetros da empresa atualizados com sucesso.", "success")
+        return redirect(url_for("manage_company_parameters"))
+
+    return render_template(
+        "company_parameters.html",
+        company_name=get_system_parameter("company_name", "Hope Desk"),
+        company_address=get_system_parameter("company_address", "Endereço não informado"),
+        company_logo=get_system_parameter("company_logo", ""),
+    )
+
+
 @app.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @login_required
 @role_required("technician")
@@ -441,22 +641,10 @@ def dashboard():
     user_id = session["user_id"]
     role = session["role"]
     today = datetime.now()
-
-    year_raw = request.args.get("year", str(today.year))
-    month_raw = request.args.get("month", str(today.month))
-
-    try:
-        selected_year = int(year_raw)
-    except (TypeError, ValueError):
-        selected_year = today.year
-
-    try:
-        selected_month = int(month_raw)
-    except (TypeError, ValueError):
-        selected_month = today.month
-
-    if selected_month < 1 or selected_month > 12:
-        selected_month = today.month
+    selected_year, selected_month = resolve_period(
+        request.args.get("year", str(today.year)),
+        request.args.get("month", str(today.month)),
+    )
 
     if role == "client":
         scope_query = Ticket.query.filter_by(client_id=user_id)
@@ -515,6 +703,156 @@ def dashboard():
         selected_year=selected_year,
         status_meta=status_meta,
         total_hours_sum=total_hours_sum,
+    )
+
+
+@app.route("/reports/services.pdf")
+@login_required
+def export_services_report_pdf():
+    selected_year, selected_month = resolve_period(
+        request.args.get("year"),
+        request.args.get("month"),
+    )
+    user_id = session["user_id"]
+    role = session["role"]
+    rows, total_hours = build_services_report_rows(selected_year, selected_month, user_id, role)
+
+    company_logo = get_system_parameter("company_logo")
+    company_name = get_system_parameter("company_name", "Hope Desk")
+    company_address = get_system_parameter("company_address", "Endereço não informado")
+
+    months = {
+        1: "JANEIRO",
+        2: "FEVEREIRO",
+        3: "MARÇO",
+        4: "ABRIL",
+        5: "MAIO",
+        6: "JUNHO",
+        7: "JULHO",
+        8: "AGOSTO",
+        9: "SETEMBRO",
+        10: "OUTUBRO",
+        11: "NOVEMBRO",
+        12: "DEZEMBRO",
+    }
+    reference_month = months.get(selected_month, str(selected_month))
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=18 * mm,
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        bottomMargin=14 * mm,
+    )
+    styles = getSampleStyleSheet()
+    elements: list = []
+
+    logo = try_build_logo(company_logo)
+    company_text = [
+        Paragraph(f"<b>{company_name}</b>", styles["Title"]),
+        Spacer(1, 3),
+        Paragraph(company_address, styles["Normal"]),
+    ]
+
+    header_table = Table(
+        [[logo if logo else "", company_text]],
+        colWidths=[40 * mm, 145 * mm],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    elements.append(header_table)
+    elements.append(Spacer(1, 10))
+
+    title = f"DEMONSTRATIVO DE SERVIÇOS REALIZADOS NO MÊS {reference_month}/{selected_year}"
+    elements.append(Paragraph(f"<b>{title}</b>", styles["Heading3"]))
+    elements.append(Spacer(1, 8))
+
+    table_data = [[
+        "ID",
+        "Data",
+        "Serviço realizado",
+        "Status",
+        "Solicitante",
+        "Técnico",
+        "Qtd. Horas",
+    ]]
+
+    for row in rows:
+        table_data.append(
+            [
+                f"#{row['ticket_id']}",
+                row["last_activity_at"].strftime("%d/%m/%Y %H:%M"),
+                Paragraph(row["title"], styles["BodyText"]),
+                row["status"],
+                row["client_name"],
+                row["technician_name"],
+                f"{row['hours']:.2f}",
+            ]
+        )
+
+    if not rows:
+        table_data.append(
+            [
+                "-",
+                "-",
+                "Nenhum chamado com tarefas realizadas no período selecionado.",
+                "-",
+                "-",
+                "-",
+                "0.00",
+            ]
+        )
+
+    report_table = Table(
+        table_data,
+        repeatRows=1,
+        colWidths=[18 * mm, 30 * mm, 58 * mm, 30 * mm, 32 * mm, 30 * mm, 20 * mm],
+    )
+    report_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9ca3af")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (1, -1), "CENTER"),
+                ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    elements.append(report_table)
+    elements.append(Spacer(1, 10))
+    elements.append(
+        Paragraph(
+            f"<b>Totais de horas no período:</b> {total_hours:.2f}",
+            styles["Heading4"],
+        )
+    )
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    file_name = f"demonstrativo_servicos_{selected_year}_{selected_month:02d}.pdf"
+    return send_file(
+        buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=file_name,
     )
 
 
@@ -846,6 +1184,7 @@ def edit_activity(ticket_id: int, activity_id: int):
 @app.cli.command("init-db")
 def init_db() -> None:
     db.create_all()
+    ensure_system_parameters()
     result = ensure_superuser()
     print(f"Banco inicializado. {result}")
 
@@ -853,5 +1192,6 @@ def init_db() -> None:
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        ensure_system_parameters()
         print(ensure_superuser())
     app.run(host="0.0.0.0", port=5000, debug=True)

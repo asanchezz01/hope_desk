@@ -3,6 +3,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h1 class="h3 mb-0">Chamados</h1>
   <div>
+    {% if session.get('is_superuser') %}
+      <a href="{{ url_for('manage_company_parameters') }}" class="btn btn-outline-dark me-2">Parâmetros da Empresa</a>
+    {% endif %}
     {% if role == 'technician' or session.get('is_superuser') %}
       <a href="{{ url_for('manage_users') }}" class="btn btn-secondary me-2">Gerenciar Usuários</a>
     {% endif %}
@@ -32,6 +35,14 @@
     </div>
     <div class="col-12 col-md-auto">
       <button type="submit" class="btn btn-outline-primary">Filtrar</button>
+    </div>
+    <div class="col-12 col-md-auto">
+      <a
+        href="{{ url_for('export_services_report_pdf', month=selected_month, year=selected_year) }}"
+        class="btn btn-primary"
+      >
+        Exportar PDF
+      </a>
     </div>
   </div>
 </form>

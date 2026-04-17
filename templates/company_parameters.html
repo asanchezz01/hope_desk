@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h1 class="h3 mb-0">Parâmetros da Empresa</h1>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      <div class="col-12">
+        <label for="company_name" class="form-label">Nome da empresa</label>
+        <input
+          type="text"
+          id="company_name"
+          name="company_name"
+          class="form-control"
+          maxlength="120"
+          value="{{ company_name }}"
+          required
+        >
+      </div>
+
+      <div class="col-12">
+        <label for="company_address" class="form-label">Endereço da empresa</label>
+        <input
+          type="text"
+          id="company_address"
+          name="company_address"
+          class="form-control"
+          maxlength="255"
+          value="{{ company_address }}"
+          required
+        >
+      </div>
+
+      <div class="col-12">
+        <label for="company_logo" class="form-label">Logo da empresa (URL ou caminho local)</label>
+        <input
+          type="text"
+          id="company_logo"
+          name="company_logo"
+          class="form-control"
+          value="{{ company_logo }}"
+          placeholder="Ex.: static/logo.png ou https://site.com/logo.png"
+        >
+        <div class="form-text">Opcional. Se vazio, o relatório será gerado sem logo.</div>
+      </div>
+
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary">Salvar parâmetros</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
