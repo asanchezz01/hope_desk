@@ -177,18 +177,35 @@ def try_build_logo(parameter_value: str) -> Image | None:
         return None
 
     try:
+        reader: ImageReader
+        image_source: str | BytesIO
         if logo_ref.startswith(("http://", "https://")):
             with urlopen(logo_ref, timeout=8) as response:
                 logo_data = response.read()
-            reader = ImageReader(BytesIO(logo_data))
-            image = Image(reader, width=35 * mm, height=20 * mm)
+            image_source = BytesIO(logo_data)
+            reader = ImageReader(image_source)
         else:
             logo_path = Path(logo_ref)
             if not logo_path.is_absolute():
                 logo_path = Path(app.root_path) / logo_path
             if not logo_path.exists():
                 return None
-            image = Image(str(logo_path), width=35 * mm, height=20 * mm)
+            image_source = str(logo_path)
+            reader = ImageReader(image_source)
+
+        source_width, source_height = reader.getSize()
+        if source_width <= 0 or source_height <= 0:
+            return None
+
+        max_width = 35 * mm
+        max_height = 20 * mm
+        scale = min(max_width / source_width, max_height / source_height)
+        draw_width = source_width * scale
+        draw_height = source_height * scale
+
+        if isinstance(image_source, BytesIO):
+            image_source.seek(0)
+        image = Image(image_source, width=draw_width, height=draw_height)
         image.hAlign = "LEFT"
         return image
     except Exception:
@@ -741,10 +758,10 @@ def export_services_report_pdf():
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        topMargin=18 * mm,
-        leftMargin=14 * mm,
-        rightMargin=14 * mm,
-        bottomMargin=14 * mm,
+        topMargin=7 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        bottomMargin=7 * mm,
     )
     styles = getSampleStyleSheet()
     elements: list = []
@@ -812,10 +829,14 @@ def export_services_report_pdf():
             ]
         )
 
+    base_col_widths_mm = [18, 24, 58, 30, 32, 30, 14]
+    width_scale = doc.width / sum(width * mm for width in base_col_widths_mm)
+    col_widths = [(width * mm) * width_scale for width in base_col_widths_mm]
+
     report_table = Table(
         table_data,
         repeatRows=1,
-        colWidths=[18 * mm, 30 * mm, 58 * mm, 30 * mm, 32 * mm, 30 * mm, 20 * mm],
+        colWidths=col_widths,
     )
     report_table.setStyle(
         TableStyle(
