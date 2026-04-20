@@ -864,6 +864,12 @@ def export_services_report_pdf():
     user_id = session["user_id"]
     role = session["role"]
     rows, total_hours = build_services_report_rows(selected_year, selected_month, user_id, role)
+    reference = datetime.now()
+    accumulated_hours_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
+        user_id=user_id,
+        role=role,
+        reference=reference,
+    )
 
     company_logo = get_system_parameter("company_logo")
     company_name = get_system_parameter("company_name", "Hope Desk")
@@ -991,7 +997,13 @@ def export_services_report_pdf():
     elements.append(Spacer(1, 10))
     elements.append(
         Paragraph(
-            f"<b>Totais de horas no período:</b> {total_hours:.2f}",
+            (
+                f"<b>Totais de horas no período:</b> {total_hours:.2f}<br/>"
+                f"<b>Total acumulado no banco de horas:</b> {accumulated_hours_total:.2f} h "
+                f"(franquia mensal: {monthly_hours_allowance:.2f} h)<br/>"
+                f"<b>Ciclo do banco de horas:</b> {cycle_start.strftime('%d/%m/%Y')} "
+                f"até {cycle_end.strftime('%d/%m/%Y')}"
+            ),
             styles["Heading4"],
         )
     )
