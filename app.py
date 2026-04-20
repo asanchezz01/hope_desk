@@ -12,6 +12,7 @@ from urllib.request import urlopen
 
 from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect, text
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -74,8 +75,10 @@ class Ticket(db.Model):
 
     client_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     technician_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    system_module_id = db.Column(db.Integer, db.ForeignKey("system_module.id"), nullable=True)
 
     activities = db.relationship("Activity", backref="ticket", lazy=True, cascade="all, delete-orphan")
+    system_module = db.relationship("SystemModule", backref="tickets", lazy=True)
 
     @property
     def total_hours(self) -> float:
@@ -102,6 +105,25 @@ class SystemParameter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(120), nullable=False, unique=True)
     value = db.Column(db.Text, nullable=False, default="")
+
+
+class SystemModule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+def ensure_ticket_schema_updates() -> None:
+    inspector = inspect(db.engine)
+    if "ticket" not in inspector.get_table_names():
+        return
+
+    ticket_columns = {column["name"] for column in inspector.get_columns("ticket")}
+    if "system_module_id" in ticket_columns:
+        return
+
+    with db.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE ticket ADD COLUMN system_module_id INTEGER"))
 
 
 def ensure_system_parameters() -> None:
@@ -663,6 +685,47 @@ def manage_company_parameters():
     )
 
 
+@app.route("/admin/system-modules", methods=["GET", "POST"])
+@login_required
+def manage_system_modules():
+    if not session.get("is_superuser", False):
+        flash("Apenas superuser pode acessar esta página.", "danger")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        module_name = request.form.get("name", "").strip()
+        if not module_name:
+            flash("Informe o nome do módulo.", "danger")
+            return redirect(url_for("manage_system_modules"))
+
+        existing = SystemModule.query.filter(db.func.lower(SystemModule.name) == module_name.lower()).first()
+        if existing:
+            flash("Já existe um módulo com este nome.", "warning")
+            return redirect(url_for("manage_system_modules"))
+
+        db.session.add(SystemModule(name=module_name, is_active=True))
+        db.session.commit()
+        flash("Módulo cadastrado com sucesso.", "success")
+        return redirect(url_for("manage_system_modules"))
+
+    modules = SystemModule.query.order_by(SystemModule.name.asc()).all()
+    return render_template("system_modules.html", modules=modules)
+
+
+@app.route("/admin/system-modules/<int:module_id>/toggle", methods=["POST"])
+@login_required
+def toggle_system_module(module_id: int):
+    if not session.get("is_superuser", False):
+        flash("Apenas superuser pode acessar esta página.", "danger")
+        return redirect(url_for("dashboard"))
+
+    system_module = SystemModule.query.get_or_404(module_id)
+    system_module.is_active = not system_module.is_active
+    db.session.commit()
+    flash("Situação do módulo atualizada.", "success")
+    return redirect(url_for("manage_system_modules"))
+
+
 @app.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @login_required
 @role_required("technician")
@@ -1025,6 +1088,7 @@ def export_services_report_pdf():
 def new_ticket():
     technicians = User.query.filter_by(role="technician").all()
     clients = User.query.filter_by(role="client").order_by(User.name.asc()).all()
+    system_modules = SystemModule.query.filter_by(is_active=True).order_by(SystemModule.name.asc()).all()
     role = session.get("role")
     is_super = session.get("is_superuser", False)
     can_create_for_client = role == "technician" or is_super
@@ -1034,9 +1098,25 @@ def new_ticket():
         description = request.form.get("description", "").strip()
         technician_id = request.form.get("technician_id")
         client_id_raw = request.form.get("client_id")
+        system_module_id_raw = request.form.get("system_module_id", "").strip()
 
         if not title or not description:
             flash("Titulo e descricao sao obrigatorios.", "danger")
+            return redirect(url_for("new_ticket"))
+
+        if not system_module_id_raw:
+            flash("Selecione o módulo do sistema.", "danger")
+            return redirect(url_for("new_ticket"))
+
+        try:
+            system_module_id = int(system_module_id_raw)
+        except (TypeError, ValueError):
+            flash("Módulo inválido.", "danger")
+            return redirect(url_for("new_ticket"))
+
+        system_module = SystemModule.query.filter_by(id=system_module_id, is_active=True).first()
+        if not system_module:
+            flash("Módulo inválido.", "danger")
             return redirect(url_for("new_ticket"))
 
         if can_create_for_client:
@@ -1074,6 +1154,7 @@ def new_ticket():
             description=description,
             client_id=client_id,
             technician_id=technician_assigned_id,
+            system_module_id=system_module.id,
         )
         db.session.add(ticket)
         db.session.commit()
@@ -1085,6 +1166,7 @@ def new_ticket():
         "new_ticket.html",
         technicians=technicians,
         clients=clients,
+        system_modules=system_modules,
         can_create_for_client=can_create_for_client,
     )
 
@@ -1096,6 +1178,7 @@ def edit_ticket(ticket_id: int):
     ticket = Ticket.query.get_or_404(ticket_id)
     technicians = User.query.filter_by(role="technician").order_by(User.name.asc()).all()
     clients = User.query.filter_by(role="client").order_by(User.name.asc()).all()
+    system_modules = SystemModule.query.order_by(SystemModule.name.asc()).all()
     valid_status = {"aberto", "em_andamento", "resolvido", "fechado"}
 
     if request.method == "POST":
@@ -1104,6 +1187,7 @@ def edit_ticket(ticket_id: int):
         status = request.form.get("status", "").strip()
         client_id_raw = request.form.get("client_id", "").strip()
         technician_id_raw = request.form.get("technician_id", "").strip()
+        system_module_id_raw = request.form.get("system_module_id", "").strip()
 
         if not title or not description:
             flash("Titulo e descricao sao obrigatorios.", "danger")
@@ -1122,6 +1206,20 @@ def edit_ticket(ticket_id: int):
         client = User.query.filter_by(id=client_id, role="client").first()
         if not client:
             flash("Cliente invalido.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        if not system_module_id_raw:
+            flash("Selecione o módulo do sistema.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+        try:
+            system_module_id = int(system_module_id_raw)
+        except (TypeError, ValueError):
+            flash("Módulo inválido.", "danger")
+            return redirect(url_for("edit_ticket", ticket_id=ticket.id))
+
+        system_module = SystemModule.query.filter_by(id=system_module_id).first()
+        if not system_module:
+            flash("Módulo inválido.", "danger")
             return redirect(url_for("edit_ticket", ticket_id=ticket.id))
 
         technician_id = None
@@ -1143,6 +1241,7 @@ def edit_ticket(ticket_id: int):
         ticket.status = status
         ticket.client_id = client_id
         ticket.technician_id = technician_id
+        ticket.system_module_id = system_module.id
         db.session.commit()
 
         if old_status != status:
@@ -1156,6 +1255,7 @@ def edit_ticket(ticket_id: int):
         ticket=ticket,
         technicians=technicians,
         clients=clients,
+        system_modules=system_modules,
     )
 
 
@@ -1348,6 +1448,7 @@ def edit_activity(ticket_id: int, activity_id: int):
 @app.cli.command("init-db")
 def init_db() -> None:
     db.create_all()
+    ensure_ticket_schema_updates()
     ensure_system_parameters()
     result = ensure_superuser()
     print(f"Banco inicializado. {result}")
@@ -1356,6 +1457,7 @@ def init_db() -> None:
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        ensure_ticket_schema_updates()
         ensure_system_parameters()
         print(ensure_superuser())
     app.run(host="0.0.0.0", port=5000, debug=True)

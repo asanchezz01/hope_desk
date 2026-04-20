@@ -5,6 +5,7 @@
   <div>
     {% if session.get('is_superuser') %}
       <a href="{{ url_for('manage_company_parameters') }}" class="btn btn-outline-dark me-2">Parâmetros da Empresa</a>
+      <a href="{{ url_for('manage_system_modules') }}" class="btn btn-outline-dark me-2">Módulos do Sistema</a>
     {% endif %}
     {% if role == 'technician' or session.get('is_superuser') %}
       <a href="{{ url_for('manage_users') }}" class="btn btn-secondary me-2">Gerenciar Usuários</a>
@@ -75,6 +76,7 @@
         <th>ID</th>
         <th>Título</th>
         <th>Status</th>
+        <th>Módulo</th>
         <th>Cliente</th>
         <th>Técnico</th>
         <th>Horas</th>
@@ -92,6 +94,7 @@
             {{ meta['label'] if meta else ticket.status.replace('_', ' ').title() }}
           </span>
         </td>
+        <td>{{ ticket.system_module.name if ticket.system_module else '-' }}</td>
         <td>{{ ticket.client.name }}</td>
         <td>{{ ticket.technician.name if ticket.technician else '-' }}</td>
         <td>{{ ticket.total_hours }}</td>
@@ -106,15 +109,14 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="text-center">Nenhum chamado encontrado.</td></tr>
+      <tr><td colspan="8" class="text-center">Nenhum chamado encontrado.</td></tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="7" class="fw-semibold text-end">Total de horas no grid: {{ '%.2f'|format(tickets_hours_sum) }} h</td>
+        <td colspan="8" class="fw-semibold text-end">Total de horas no grid: {{ '%.2f'|format(tickets_hours_sum) }} h</td>
       </tr>
     </tfoot>
   </table>
 </div>
 {% endblock %}
-

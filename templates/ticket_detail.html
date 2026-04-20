@@ -18,6 +18,7 @@
     <h2 class="h5">{{ ticket.title }}</h2>
     <p>{{ ticket.description }}</p>
     <p class="mb-1"><strong>Status:</strong> {{ ticket.status }}</p>
+    <p class="mb-1"><strong>Módulo:</strong> {{ ticket.system_module.name if ticket.system_module else '-' }}</p>
     <p class="mb-1"><strong>Cliente:</strong> {{ ticket.client.name }}</p>
     <p class="mb-1"><strong>Técnico:</strong> {{ ticket.technician.name if ticket.technician else '-' }}</p>
     <p class="mb-0"><strong>Horas totais:</strong> {{ ticket.total_hours }}</p>
