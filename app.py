@@ -1,3 +1,5 @@
+import calendar
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from email.message import EmailMessage
@@ -107,6 +109,8 @@ def ensure_system_parameters() -> None:
         "company_logo": "",
         "company_name": "Hope Desk",
         "company_address": "Endereço não informado",
+        "monthly_hours_allowance": "16",
+        "hours_bank_closing_date": "2000-01-01",
     }
     existing = {
         row.key for row in SystemParameter.query.filter(SystemParameter.key.in_(defaults.keys())).all()
@@ -159,6 +163,75 @@ def month_period_bounds(year: int, month: int) -> tuple[datetime, datetime]:
     else:
         end = datetime(year, month + 1, 1)
     return start, end
+
+
+def add_months(base_date: datetime, months: int) -> datetime:
+    month_index = (base_date.month - 1) + months
+    target_year = base_date.year + (month_index // 12)
+    target_month = (month_index % 12) + 1
+    target_day = min(base_date.day, calendar.monthrange(target_year, target_month)[1])
+    return base_date.replace(year=target_year, month=target_month, day=target_day)
+
+
+def resolve_hours_bank_window(closing_date_raw: str, reference: datetime) -> tuple[datetime, datetime]:
+    try:
+        anchor = datetime.strptime(closing_date_raw, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        anchor = reference.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        anchor = anchor.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    while anchor > reference:
+        anchor = add_months(anchor, -6)
+
+    next_reset = add_months(anchor, 6)
+    while next_reset <= reference:
+        anchor = next_reset
+        next_reset = add_months(anchor, 6)
+
+    return anchor, next_reset
+
+
+def calculate_accumulated_hours(user_id: int, role: str, reference: datetime) -> tuple[float, float, datetime, datetime]:
+    franchise_hours_raw = get_system_parameter("monthly_hours_allowance", "16")
+    try:
+        franchise_hours = float(franchise_hours_raw.replace(",", "."))
+    except ValueError:
+        franchise_hours = 16.0
+    franchise_hours = max(franchise_hours, 0)
+
+    closing_date_raw = get_system_parameter("hours_bank_closing_date", "")
+    cycle_start, cycle_end = resolve_hours_bank_window(closing_date_raw, reference)
+
+    activity_scope = Activity.query.join(Ticket, Activity.ticket_id == Ticket.id).filter(
+        Activity.ended_at > cycle_start,
+        Activity.started_at < reference,
+    )
+    if role == "client":
+        activity_scope = activity_scope.filter(Ticket.client_id == user_id)
+
+    monthly_totals: dict[tuple[int, int], float] = defaultdict(float)
+    for activity in activity_scope.all():
+        overlap_start = max(activity.started_at, cycle_start)
+        overlap_end = min(activity.ended_at, reference)
+        if overlap_end <= overlap_start:
+            continue
+
+        cursor = overlap_start
+        while cursor < overlap_end:
+            if cursor.month == 12:
+                next_month = datetime(cursor.year + 1, 1, 1)
+            else:
+                next_month = datetime(cursor.year, cursor.month + 1, 1)
+            segment_end = min(overlap_end, next_month)
+            monthly_totals[(cursor.year, cursor.month)] += (segment_end - cursor).total_seconds() / 3600
+            cursor = segment_end
+
+    accumulated = 0.0
+    for month_hours in monthly_totals.values():
+        accumulated += max(month_hours - franchise_hours, 0)
+
+    return round(accumulated, 2), round(franchise_hours, 2), cycle_start, cycle_end
 
 
 def normalize_status(status: str) -> str:
@@ -537,6 +610,8 @@ def manage_company_parameters():
         company_name = request.form.get("company_name", "").strip()
         company_address = request.form.get("company_address", "").strip()
         company_logo = request.form.get("company_logo", "").strip()
+        monthly_hours_allowance_raw = request.form.get("monthly_hours_allowance", "").strip()
+        hours_bank_closing_date_raw = request.form.get("hours_bank_closing_date", "").strip()
 
         if not company_name:
             flash("Informe o nome da empresa.", "danger")
@@ -546,18 +621,45 @@ def manage_company_parameters():
             flash("Informe o endereço da empresa.", "danger")
             return redirect(url_for("manage_company_parameters"))
 
+        if not monthly_hours_allowance_raw:
+            flash("Informe a quantidade de horas de franquia mensal.", "danger")
+            return redirect(url_for("manage_company_parameters"))
+
+        normalized_allowance = monthly_hours_allowance_raw.replace(",", ".")
+        try:
+            monthly_hours_allowance = float(normalized_allowance)
+            if monthly_hours_allowance < 0:
+                raise ValueError
+        except ValueError:
+            flash("A franquia mensal deve ser um número válido maior ou igual a zero.", "danger")
+            return redirect(url_for("manage_company_parameters"))
+
+        try:
+            closing_date = datetime.strptime(hours_bank_closing_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Informe uma data de fechamento do banco de horas válida.", "danger")
+            return redirect(url_for("manage_company_parameters"))
+
         set_system_parameter("company_name", company_name)
         set_system_parameter("company_address", company_address)
         set_system_parameter("company_logo", company_logo)
+        set_system_parameter("monthly_hours_allowance", f"{monthly_hours_allowance:.2f}")
+        set_system_parameter("hours_bank_closing_date", closing_date.isoformat())
         db.session.commit()
         flash("Parâmetros da empresa atualizados com sucesso.", "success")
         return redirect(url_for("manage_company_parameters"))
 
+    today = datetime.now()
     return render_template(
         "company_parameters.html",
         company_name=get_system_parameter("company_name", "Hope Desk"),
         company_address=get_system_parameter("company_address", "Endereço não informado"),
         company_logo=get_system_parameter("company_logo", ""),
+        monthly_hours_allowance=get_system_parameter("monthly_hours_allowance", "16"),
+        hours_bank_closing_date=get_system_parameter(
+            "hours_bank_closing_date",
+            today.replace(month=1, day=1).date().isoformat(),
+        ),
     )
 
 
@@ -662,6 +764,10 @@ def dashboard():
         request.args.get("year", str(today.year)),
         request.args.get("month", str(today.month)),
     )
+    selected_status = (request.args.get("status", "nao_concluidos") or "nao_concluidos").strip().lower()
+    valid_status_filters = {"nao_concluidos", "all", "aberto", "em_andamento", "resolvido", "fechado"}
+    if selected_status not in valid_status_filters:
+        selected_status = "nao_concluidos"
 
     if role == "client":
         scope_query = Ticket.query.filter_by(client_id=user_id)
@@ -681,12 +787,22 @@ def dashboard():
     if today.year not in available_years:
         available_years.insert(0, today.year)
 
-    tickets = (
-        scope_query.filter(year_expr == selected_year, month_expr == selected_month)
-        .order_by(Ticket.created_at.desc())
-        .all()
+    period_scope_query = scope_query.filter(year_expr == selected_year, month_expr == selected_month)
+    total_hours_sum = round(sum(ticket.total_hours for ticket in period_scope_query.all()), 2)
+
+    tickets_query = period_scope_query
+    if selected_status == "nao_concluidos":
+        tickets_query = tickets_query.filter(~Ticket.status.in_(["resolvido", "fechado"]))
+    elif selected_status != "all":
+        tickets_query = tickets_query.filter(Ticket.status == selected_status)
+
+    tickets = tickets_query.order_by(Ticket.created_at.desc()).all()
+    tickets_hours_sum = round(sum(ticket.total_hours for ticket in tickets), 2)
+    accumulated_hours_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
+        user_id=user_id,
+        role=role,
+        reference=today,
     )
-    total_hours_sum = round(sum(ticket.total_hours for ticket in tickets), 2)
 
     months = [
         (1, "Janeiro"),
@@ -709,17 +825,32 @@ def dashboard():
         "resolvido": {"label": "Concluído", "class": "status-done"},
         "fechado": {"label": "Fechado", "class": "status-done"},
     }
+    status_filters = [
+        ("nao_concluidos", "Não concluídos"),
+        ("all", "Todos"),
+        ("aberto", "Em aberto"),
+        ("em_andamento", "Em andamento"),
+        ("resolvido", "Concluído"),
+        ("fechado", "Fechado"),
+    ]
 
     return render_template(
         "dashboard.html",
         tickets=tickets,
+        tickets_hours_sum=tickets_hours_sum,
         role=role,
         months=months,
         selected_month=selected_month,
         available_years=available_years,
         selected_year=selected_year,
+        selected_status=selected_status,
+        status_filters=status_filters,
         status_meta=status_meta,
         total_hours_sum=total_hours_sum,
+        accumulated_hours_total=accumulated_hours_total,
+        monthly_hours_allowance=monthly_hours_allowance,
+        cycle_start_label=cycle_start.strftime("%d/%m/%Y"),
+        cycle_end_label=cycle_end.strftime("%d/%m/%Y"),
     )
 
 

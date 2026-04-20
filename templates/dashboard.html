@@ -33,6 +33,14 @@
         {% endfor %}
       </select>
     </div>
+    <div class="col-12 col-md-3">
+      <label for="status" class="form-label mb-1">Status</label>
+      <select id="status" name="status" class="form-select">
+        {% for status_value, status_label in status_filters %}
+          <option value="{{ status_value }}" {% if selected_status == status_value %}selected{% endif %}>{{ status_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="col-12 col-md-auto">
       <button type="submit" class="btn btn-outline-primary">Filtrar</button>
     </div>
@@ -48,9 +56,15 @@
 </form>
 
 <div class="card p-3 mb-3 border-0 shadow-sm">
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span class="text-muted">Total de horas (chamados filtrados)</span>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <span class="text-muted">Total de horas do período</span>
     <strong class="h5 mb-0">{{ '%.2f'|format(total_hours_sum) }} h</strong>
+  </div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="text-muted">
+      Total acumulado no banco de horas (Ciclo atual: {{ cycle_start_label }} até {{ cycle_end_label }})
+    </span>
+    <strong class="h5 mb-0">{{ '%.2f'|format(accumulated_hours_total) }} h</strong>
   </div>
 </div>
 
@@ -95,6 +109,11 @@
       <tr><td colspan="7" class="text-center">Nenhum chamado encontrado.</td></tr>
       {% endfor %}
     </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="7" class="fw-semibold text-end">Total de horas no grid: {{ '%.2f'|format(tickets_hours_sum) }} h</td>
+      </tr>
+    </tfoot>
   </table>
 </div>
 {% endblock %}
