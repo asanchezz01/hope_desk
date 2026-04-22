@@ -248,6 +248,17 @@ body {
   background: #eef4fd;
 }
 
+.top-actions-button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
 .top-actions-link-danger {
   color: #b42318;
 }

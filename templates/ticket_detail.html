@@ -3,13 +3,24 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h1 class="h3 mb-0">Chamado #{{ ticket.id }}</h1>
   <div class="d-flex gap-2">
-    {% if role == 'technician' or session.get('is_superuser') %}
-    <a href="{{ url_for('edit_ticket', ticket_id=ticket.id) }}" class="btn btn-primary">Editar chamado</a>
-    <form method="post" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" onsubmit="return confirm('Deseja realmente excluir este chamado?');">
-      <button type="submit" class="btn btn-danger">Excluir chamado</button>
-    </form>
-    {% endif %}
     <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Voltar</a>
+    {% if role == 'technician' or session.get('is_superuser') %}
+    <details class="top-actions-menu">
+      <summary class="top-actions-trigger btn btn-admin-action" aria-label="Abrir ações do chamado">
+        <span class="ticket-menu-icon" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+      </summary>
+      <div class="top-actions-panel">
+        <a href="{{ url_for('edit_ticket', ticket_id=ticket.id) }}" class="top-actions-link">Editar chamado</a>
+        <form method="post" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" onsubmit="return confirm('Deseja realmente excluir este chamado?');">
+          <button type="submit" class="top-actions-button top-actions-link-danger">Excluir chamado</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
   </div>
 </div>
 
