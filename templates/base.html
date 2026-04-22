@@ -16,15 +16,20 @@
     </a>
     {% if session.get('user_id') %}
       <div class="d-flex app-navbar-user align-items-center gap-3">
-        <span
-          class="app-user-avatar"
-          title="{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})"
-          aria-label="Usuário logado: {{ session.get('user_name') }}"
-        >
-          <svg viewBox="0 0 16 16" class="app-user-icon" aria-hidden="true" focusable="false">
-            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 7a5 5 0 1 1 10 0H3Z"></path>
-          </svg>
-        </span>
+        <details class="user-info-menu">
+          <summary
+            class="app-user-avatar"
+            title="{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})"
+            aria-label="Usuário logado: {{ session.get('user_name') }}"
+          >
+            <svg viewBox="0 0 16 16" class="app-user-icon" aria-hidden="true" focusable="false">
+              <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 7a5 5 0 1 1 10 0H3Z"></path>
+            </svg>
+          </summary>
+          <div class="user-info-panel">
+            {{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})
+          </div>
+        </details>
         <details class="top-actions-menu">
           <summary class="top-actions-trigger btn btn-admin-action" aria-label="Abrir menu do usuário">
             <span class="ticket-menu-icon" aria-hidden="true">
