@@ -3,26 +3,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h1 class="h3 mb-0">Chamados</h1>
   <div class="d-flex flex-wrap gap-2 align-items-center">
-    {% if session.get('is_superuser') or role == 'technician' %}
-      <details class="top-actions-menu">
-        <summary class="top-actions-trigger btn btn-admin-action" aria-label="Abrir menu de ações administrativas">
-          <span class="ticket-menu-icon" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </span>
-        </summary>
-        <div class="top-actions-panel">
-          {% if session.get('is_superuser') %}
-            <a href="{{ url_for('manage_company_parameters') }}" class="top-actions-link">Parâmetros da Empresa</a>
-            <a href="{{ url_for('manage_system_modules') }}" class="top-actions-link">Módulos do Sistema</a>
-          {% endif %}
-          {% if role == 'technician' or session.get('is_superuser') %}
-            <a href="{{ url_for('manage_users') }}" class="top-actions-link">Gerenciar Usuários</a>
-          {% endif %}
-        </div>
-      </details>
-    {% endif %}
     {% if role == 'client' or role == 'technician' or session.get('is_superuser') %}
       <a href="{{ url_for('new_ticket') }}" class="btn btn-primary">Novo chamado</a>
     {% endif %}

@@ -53,6 +53,23 @@ body {
   color: #1f2a44;
 }
 
+.app-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #c5d3e8;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.app-user-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: #234783;
+}
+
 .btn-primary {
   --bs-btn-bg: var(--brand-blue);
   --bs-btn-border-color: var(--brand-blue);
@@ -200,6 +217,18 @@ body {
 
 .top-actions-link:hover {
   background: #eef4fd;
+}
+
+.top-actions-link-danger {
+  color: #b42318;
+}
+
+.top-actions-link-danger:hover {
+  background: #fee4e2;
+}
+
+.app-navbar .top-actions-panel {
+  min-width: 230px;
 }
 
 .status-pill {

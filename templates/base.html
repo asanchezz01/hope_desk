@@ -16,8 +16,34 @@
     </a>
     {% if session.get('user_id') %}
       <div class="d-flex app-navbar-user align-items-center gap-3">
-        <span>{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})</span>
-        <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Sair</a>
+        <span
+          class="app-user-avatar"
+          title="{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})"
+          aria-label="Usuário logado: {{ session.get('user_name') }}"
+        >
+          <svg viewBox="0 0 16 16" class="app-user-icon" aria-hidden="true" focusable="false">
+            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 7a5 5 0 1 1 10 0H3Z"></path>
+          </svg>
+        </span>
+        <details class="top-actions-menu">
+          <summary class="top-actions-trigger btn btn-admin-action" aria-label="Abrir menu do usuário">
+            <span class="ticket-menu-icon" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </summary>
+          <div class="top-actions-panel">
+            {% if session.get('is_superuser') %}
+              <a href="{{ url_for('manage_company_parameters') }}" class="top-actions-link">Parâmetros da Empresa</a>
+              <a href="{{ url_for('manage_system_modules') }}" class="top-actions-link">Módulos do Sistema</a>
+            {% endif %}
+            {% if session.get('role') == 'technician' or session.get('is_superuser') %}
+              <a href="{{ url_for('manage_users') }}" class="top-actions-link">Gerenciar Usuários</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}" class="top-actions-link top-actions-link-danger">Sair</a>
+          </div>
+        </details>
       </div>
     {% endif %}
   </div>
