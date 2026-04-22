@@ -4,12 +4,12 @@
   <h1 class="h3 mb-0">Chamado #{{ ticket.id }}</h1>
   <div class="d-flex gap-2">
     {% if role == 'technician' or session.get('is_superuser') %}
-    <a href="{{ url_for('edit_ticket', ticket_id=ticket.id) }}" class="btn btn-outline-primary">Editar chamado</a>
+    <a href="{{ url_for('edit_ticket', ticket_id=ticket.id) }}" class="btn btn-primary">Editar chamado</a>
     <form method="post" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" onsubmit="return confirm('Deseja realmente excluir este chamado?');">
-      <button type="submit" class="btn btn-outline-danger">Excluir chamado</button>
+      <button type="submit" class="btn btn-danger">Excluir chamado</button>
     </form>
     {% endif %}
-    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Voltar</a>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Voltar</a>
   </div>
 </div>
 
@@ -27,24 +27,28 @@
 
 {% if role == 'technician' %}
 <div class="row g-3 mb-4">
-  <div class="col-12 col-lg-4">
+  <div class="col-12">
     <div class="card h-100">
       <div class="card-body">
         <h3 class="h6">Atualizar status</h3>
-        <form method="post">
+        <form method="post" id="status-update-form">
           <input type="hidden" name="action" value="status">
-          <select class="form-select mb-3" name="status">
+          <select
+            class="form-select mb-2"
+            name="status"
+            onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit();"
+          >
             <option value="aberto" {% if ticket.status == 'aberto' %}selected{% endif %}>Aberto</option>
             <option value="em_andamento" {% if ticket.status == 'em_andamento' %}selected{% endif %}>Em andamento</option>
             <option value="resolvido" {% if ticket.status == 'resolvido' %}selected{% endif %}>Resolvido</option>
             <option value="fechado" {% if ticket.status == 'fechado' %}selected{% endif %}>Fechado</option>
           </select>
-          <button class="btn btn-warning w-100" type="submit">Salvar status</button>
+          <small class="text-muted">O status é salvo automaticamente ao selecionar uma opção.</small>
         </form>
       </div>
     </div>
   </div>
-  <div class="col-12 col-lg-8">
+  <div class="col-12">
     <div class="card h-100">
       <div class="card-body">
         <h3 class="h6">Registrar atividade</h3>
@@ -64,7 +68,7 @@
               <input class="form-control" type="datetime-local" name="ended_at" id="activity-ended-at" required>
             </div>
           </div>
-          <button class="btn btn-success" type="submit">Salvar atividade</button>
+          <button class="btn btn-primary" type="submit">Salvar atividade</button>
         </form>
       </div>
     </div>

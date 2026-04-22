@@ -9,13 +9,15 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<nav class="navbar navbar-expand-lg app-navbar mb-4">
   <div class="container">
-    <a class="navbar-brand" href="{{ url_for('dashboard') if session.get('user_id') else url_for('login') }}">Hope Desk</a>
+    <a class="navbar-brand app-brand" href="{{ url_for('dashboard') if session.get('user_id') else url_for('login') }}">
+      <img src="{{ url_for('static', filename='hope_desk_logo.png') }}" alt="Hope Desk" class="app-brand-logo">
+    </a>
     {% if session.get('user_id') %}
-      <div class="d-flex text-white align-items-center gap-3">
+      <div class="d-flex app-navbar-user align-items-center gap-3">
         <span>{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})</span>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Sair</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-sm">Sair</a>
       </div>
     {% endif %}
   </div>
