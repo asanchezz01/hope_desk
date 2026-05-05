@@ -41,6 +41,7 @@
             </span>
           </summary>
           <div class="top-actions-panel">
+            <a href="{{ url_for('activities_report') }}" class="top-actions-link">Relatório de Atividades</a>
             {% if session.get('is_superuser') %}
               <a href="{{ url_for('manage_company_parameters') }}" class="top-actions-link">Parâmetros da Empresa</a>
               <a href="{{ url_for('manage_system_modules') }}" class="top-actions-link">Módulos do Sistema</a>

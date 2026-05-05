@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from email.message import EmailMessage
+from html import escape
 import smtplib
 import ssl
 from io import BytesIO
@@ -14,7 +15,7 @@ from flask import Flask, flash, redirect, render_template, request, send_file, s
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
@@ -187,6 +188,34 @@ def month_period_bounds(year: int, month: int) -> tuple[datetime, datetime]:
     return start, end
 
 
+def resolve_date_period(start_raw: str | None, end_raw: str | None) -> tuple[datetime, datetime, str, str]:
+    today = datetime.now()
+    default_start, default_end = month_period_bounds(today.year, today.month)
+
+    try:
+        start_date = datetime.strptime(start_raw or default_start.strftime("%Y-%m-%d"), "%Y-%m-%d")
+    except (TypeError, ValueError):
+        start_date = default_start
+
+    try:
+        end_date = datetime.strptime(end_raw or (default_end - timedelta(days=1)).strftime("%Y-%m-%d"), "%Y-%m-%d")
+    except (TypeError, ValueError):
+        end_date = default_end - timedelta(days=1)
+
+    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_exclusive = (end_date + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if end_exclusive <= start_date:
+        start_date, end_exclusive = default_start, default_end
+
+    return (
+        start_date,
+        end_exclusive,
+        start_date.strftime("%Y-%m-%d"),
+        (end_exclusive - timedelta(days=1)).strftime("%Y-%m-%d"),
+    )
+
+
 def add_months(base_date: datetime, months: int) -> datetime:
     month_index = (base_date.month - 1) + months
     target_year = base_date.year + (month_index // 12)
@@ -355,6 +384,86 @@ def build_services_report_rows(selected_year: int, selected_month: int, user_id:
         row["hours"] = round(row["hours"], 2)
     total_hours = round(sum(row["hours"] for row in report_rows), 2)
     return report_rows, total_hours
+
+
+def build_activity_report(
+    period_start: datetime,
+    period_end: datetime,
+    user_id: int,
+    role: str,
+) -> tuple[list[dict], list[dict], float]:
+    activity_scope = (
+        Activity.query.join(Ticket, Activity.ticket_id == Ticket.id)
+        .filter(Activity.ended_at > period_start, Activity.started_at < period_end)
+        .order_by(Ticket.id.asc(), Activity.started_at.asc())
+    )
+    if role == "client":
+        activity_scope = activity_scope.filter(Ticket.client_id == user_id)
+
+    grouped: dict[int, dict] = {}
+    technician_totals: dict[int, dict] = {}
+
+    for activity in activity_scope.all():
+        ticket = activity.ticket
+        if not ticket:
+            continue
+
+        overlap_start = max(activity.started_at, period_start)
+        overlap_end = min(activity.ended_at, period_end)
+        overlap_hours = max((overlap_end - overlap_start).total_seconds() / 3600, 0)
+        if overlap_hours <= 0:
+            continue
+
+        ticket_row = grouped.get(ticket.id)
+        if ticket_row is None:
+            ticket_row = {
+                "ticket_id": ticket.id,
+                "title": ticket.title,
+                "description": ticket.description,
+                "status": normalize_status(ticket.status),
+                "client_name": ticket.client.name if ticket.client else "-",
+                "assigned_technician": ticket.technician.name if ticket.technician else "-",
+                "module_name": ticket.system_module.name if ticket.system_module else "-",
+                "created_at": ticket.created_at,
+                "total_hours": 0.0,
+                "activities": [],
+            }
+            grouped[ticket.id] = ticket_row
+
+        technician = activity.created_by
+        technician_name = technician.name if technician else "Técnico não informado"
+        activity_row = {
+            "started_at": activity.started_at,
+            "ended_at": activity.ended_at,
+            "period_started_at": overlap_start,
+            "period_ended_at": overlap_end,
+            "technician_name": technician_name,
+            "notes": activity.notes,
+            "hours": round(overlap_hours, 2),
+        }
+        ticket_row["activities"].append(activity_row)
+        ticket_row["total_hours"] += overlap_hours
+
+        technician_key = technician.id if technician else 0
+        technician_row = technician_totals.setdefault(
+            technician_key,
+            {"technician_name": technician_name, "hours": 0.0},
+        )
+        technician_row["hours"] += overlap_hours
+
+    tickets = sorted(grouped.values(), key=lambda item: item["ticket_id"])
+    for ticket_row in tickets:
+        ticket_row["total_hours"] = round(ticket_row["total_hours"], 2)
+
+    totals_by_technician = sorted(
+        technician_totals.values(),
+        key=lambda item: item["technician_name"].lower(),
+    )
+    for technician_row in totals_by_technician:
+        technician_row["hours"] = round(technician_row["hours"], 2)
+
+    total_hours = round(sum(ticket_row["total_hours"] for ticket_row in tickets), 2)
+    return tickets, totals_by_technician, total_hours
 
 
 def ensure_superuser() -> str:
@@ -914,6 +1023,184 @@ def dashboard():
         monthly_hours_allowance=monthly_hours_allowance,
         cycle_start_label=cycle_start.strftime("%d/%m/%Y"),
         cycle_end_label=cycle_end.strftime("%d/%m/%Y"),
+    )
+
+
+@app.route("/reports/activities")
+@login_required
+def activities_report():
+    period_start, period_end, start_value, end_value = resolve_date_period(
+        request.args.get("start_date"),
+        request.args.get("end_date"),
+    )
+    tickets, totals_by_technician, total_hours = build_activity_report(
+        period_start=period_start,
+        period_end=period_end,
+        user_id=session["user_id"],
+        role=session["role"],
+    )
+
+    return render_template(
+        "activities_report.html",
+        tickets=tickets,
+        totals_by_technician=totals_by_technician,
+        total_hours=total_hours,
+        start_date=start_value,
+        end_date=end_value,
+        period_start_label=period_start.strftime("%d/%m/%Y"),
+        period_end_label=(period_end - timedelta(days=1)).strftime("%d/%m/%Y"),
+    )
+
+
+@app.route("/reports/activities.pdf")
+@login_required
+def export_activities_report_pdf():
+    period_start, period_end, start_value, end_value = resolve_date_period(
+        request.args.get("start_date"),
+        request.args.get("end_date"),
+    )
+    tickets, totals_by_technician, total_hours = build_activity_report(
+        period_start=period_start,
+        period_end=period_end,
+        user_id=session["user_id"],
+        role=session["role"],
+    )
+
+    company_logo = get_system_parameter("company_logo")
+    company_name = get_system_parameter("company_name", "Hope Desk")
+    company_address = get_system_parameter("company_address", "Endereço não informado")
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        topMargin=7 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        bottomMargin=7 * mm,
+    )
+    styles = getSampleStyleSheet()
+    elements: list = []
+
+    logo = try_build_logo(company_logo)
+    company_text = [
+        Paragraph(f"<b>{escape(company_name)}</b>", styles["Title"]),
+        Spacer(1, 3),
+        Paragraph(escape(company_address), styles["Normal"]),
+    ]
+    header_table = Table([[logo if logo else "", company_text]], colWidths=[40 * mm, doc.width - (40 * mm)])
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    elements.append(header_table)
+    elements.append(Spacer(1, 10))
+    elements.append(
+        Paragraph(
+            (
+                "<b>RELATÓRIO DE ATIVIDADES REALIZADAS</b><br/>"
+                f"Período: {period_start.strftime('%d/%m/%Y')} até "
+                f"{(period_end - timedelta(days=1)).strftime('%d/%m/%Y')}"
+            ),
+            styles["Heading3"],
+        )
+    )
+    elements.append(Spacer(1, 8))
+
+    if tickets:
+        for ticket in tickets:
+            ticket_title = (
+                f"<b>Chamado #{ticket['ticket_id']} - {escape(ticket['title'])}</b><br/>"
+                f"Status: {escape(ticket['status'])} | Cliente: {escape(ticket['client_name'])} | "
+                f"Técnico responsável: {escape(ticket['assigned_technician'])} | "
+                f"Módulo: {escape(ticket['module_name'])} | "
+                f"Abertura: {ticket['created_at'].strftime('%d/%m/%Y %H:%M')} | "
+                f"Total no período: {ticket['total_hours']:.2f} h"
+            )
+            elements.append(Paragraph(ticket_title, styles["Heading4"]))
+            elements.append(Spacer(1, 4))
+
+            table_data = [["Início", "Fim", "Técnico", "Atividade", "Horas"]]
+            for activity in ticket["activities"]:
+                table_data.append(
+                    [
+                        activity["started_at"].strftime("%d/%m/%Y %H:%M"),
+                        activity["ended_at"].strftime("%d/%m/%Y %H:%M"),
+                        activity["technician_name"],
+                        Paragraph(escape(activity["notes"]), styles["BodyText"]),
+                        f"{activity['hours']:.2f}",
+                    ]
+                )
+
+            activity_table = Table(
+                table_data,
+                repeatRows=1,
+                colWidths=[31 * mm, 31 * mm, 42 * mm, 146 * mm, 18 * mm],
+            )
+            activity_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9ca3af")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("ALIGN", (0, 0), (1, -1), "CENTER"),
+                        ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ]
+                )
+            )
+            elements.append(activity_table)
+            elements.append(Spacer(1, 8))
+    else:
+        elements.append(Paragraph("Nenhuma atividade realizada no período selecionado.", styles["Normal"]))
+        elements.append(Spacer(1, 8))
+
+    totals_data = [["Técnico", "Total de horas"]]
+    for row in totals_by_technician:
+        totals_data.append([row["technician_name"], f"{row['hours']:.2f}"])
+    totals_data.append(["TOTAL GERAL", f"{total_hours:.2f}"])
+
+    totals_table = Table(totals_data, colWidths=[80 * mm, 35 * mm])
+    totals_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#234783")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9ca3af")),
+                ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    elements.append(Paragraph("<b>Totalizador por técnico</b>", styles["Heading4"]))
+    elements.append(totals_table)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    file_name = f"relatorio_atividades_{start_value}_a_{end_value}.pdf"
+    return send_file(
+        buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=file_name,
     )
 
 
