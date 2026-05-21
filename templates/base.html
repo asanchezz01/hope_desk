@@ -45,6 +45,7 @@
             {% if session.get('is_superuser') %}
               <a href="{{ url_for('manage_company_parameters') }}" class="top-actions-link">Parâmetros da Empresa</a>
               <a href="{{ url_for('manage_system_modules') }}" class="top-actions-link">Módulos do Sistema</a>
+              <a href="{{ url_for('manage_payments') }}" class="top-actions-link">Cadastro de Pagamentos</a>
             {% endif %}
             {% if session.get('role') == 'technician' or session.get('is_superuser') %}
               <a href="{{ url_for('manage_users') }}" class="top-actions-link">Gerenciar Usuários</a>

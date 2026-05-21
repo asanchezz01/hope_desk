@@ -54,11 +54,13 @@
     <span class="text-muted">Total de horas do período</span>
     <strong class="h5 mb-0">{{ '%.2f'|format(total_hours_sum) }} h</strong>
   </div>
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span class="text-muted">
-      Total acumulado no banco de horas (Ciclo atual: {{ cycle_start_label }} até {{ cycle_end_label }})
-    </span>
-    <strong class="h5 mb-0">{{ '%.2f'|format(accumulated_hours_total) }} h</strong>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <span class="text-muted">Atividades do período em chamados de outros meses</span>
+    <strong class="h5 mb-0">{{ '%.2f'|format(external_ticket_activity_hours) }} h</strong>
+  </div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <span class="text-muted">Horas pagas no período selecionado</span>
+    <strong class="h5 mb-0">{{ '%.2f'|format(paid_hours_total) }} h</strong>
   </div>
 </div>
 

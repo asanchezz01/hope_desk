@@ -114,6 +114,22 @@ class SystemModule(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
 
+class PaymentRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    paid_at = db.Column(db.Date, nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+    paid_hours = db.Column(db.Float, nullable=False, default=0.0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    @property
+    def paid_hours_display(self) -> float:
+        return round(self.paid_hours, 2)
+
+    @property
+    def amount_display(self) -> float:
+        return round(self.amount, 2)
+
+
 def ensure_ticket_schema_updates() -> None:
     inspector = inspect(db.engine)
     if "ticket" not in inspector.get_table_names():
@@ -243,7 +259,7 @@ def resolve_hours_bank_window(closing_date_raw: str, reference: datetime) -> tup
     return anchor, next_reset
 
 
-def calculate_accumulated_hours(user_id: int, role: str, reference: datetime) -> tuple[float, float, datetime, datetime]:
+def calculate_accumulated_hours(user_id: int, role: str, reference: datetime) -> tuple[float, float, float, datetime, datetime]:
     franchise_hours_raw = get_system_parameter("monthly_hours_allowance", "16")
     try:
         franchise_hours = float(franchise_hours_raw.replace(",", "."))
@@ -282,7 +298,23 @@ def calculate_accumulated_hours(user_id: int, role: str, reference: datetime) ->
     for month_hours in monthly_totals.values():
         accumulated += max(month_hours - franchise_hours, 0)
 
-    return round(accumulated, 2), round(franchise_hours, 2), cycle_start, cycle_end
+    payment_scope = PaymentRecord.query.filter(
+        PaymentRecord.paid_at >= cycle_start.date(),
+        PaymentRecord.paid_at <= reference.date(),
+    )
+    paid_hours = round(sum(payment.paid_hours for payment in payment_scope.all()), 2)
+    net_accumulated = max(accumulated - paid_hours, 0)
+
+    return round(net_accumulated, 2), paid_hours, round(franchise_hours, 2), cycle_start, cycle_end
+
+
+def calculate_paid_hours_for_month(selected_year: int, selected_month: int) -> float:
+    period_start, period_end = month_period_bounds(selected_year, selected_month)
+    payment_scope = PaymentRecord.query.filter(
+        PaymentRecord.paid_at >= period_start.date(),
+        PaymentRecord.paid_at < period_end.date(),
+    )
+    return round(sum(payment.paid_hours for payment in payment_scope.all()), 2)
 
 
 def normalize_status(status: str) -> str:
@@ -349,7 +381,7 @@ def build_services_report_rows(selected_year: int, selected_month: int, user_id:
         activity_scope = activity_scope.filter(Ticket.client_id == user_id)
 
     activities = activity_scope.all()
-    grouped: dict[int, dict] = {}
+    report_rows: list[dict] = []
     for activity in activities:
         ticket = activity.ticket
         if not ticket:
@@ -362,28 +394,44 @@ def build_services_report_rows(selected_year: int, selected_month: int, user_id:
             continue
 
         activity_end_for_period = min(activity.ended_at, period_end_display)
-        row = grouped.get(ticket.id)
-        if row is None:
-            row = {
+        technician = activity.created_by or ticket.technician
+        report_rows.append(
+            {
                 "ticket_id": ticket.id,
                 "last_activity_at": activity_end_for_period,
                 "title": ticket.title,
+                "service": activity.notes,
                 "status": normalize_status(ticket.status),
                 "client_name": ticket.client.name if ticket.client else "-",
-                "technician_name": ticket.technician.name if ticket.technician else "-",
-                "hours": 0.0,
+                "technician_name": technician.name if technician else "-",
+                "hours": round(overlap_hours, 2),
             }
-            grouped[ticket.id] = row
+        )
 
-        row["hours"] += overlap_hours
-        if activity_end_for_period > row["last_activity_at"]:
-            row["last_activity_at"] = activity_end_for_period
-
-    report_rows = sorted(grouped.values(), key=lambda item: item["last_activity_at"], reverse=True)
-    for row in report_rows:
-        row["hours"] = round(row["hours"], 2)
+    report_rows = sorted(report_rows, key=lambda item: item["last_activity_at"], reverse=True)
     total_hours = round(sum(row["hours"] for row in report_rows), 2)
     return report_rows, total_hours
+
+
+def calculate_external_ticket_activity_hours(selected_year: int, selected_month: int, user_id: int, role: str) -> float:
+    period_start, period_end = month_period_bounds(selected_year, selected_month)
+    ticket_year_expr = db.extract("year", Ticket.created_at)
+    ticket_month_expr = db.extract("month", Ticket.created_at)
+    activity_scope = (
+        Activity.query.join(Ticket, Activity.ticket_id == Ticket.id)
+        .filter(Activity.ended_at > period_start, Activity.started_at < period_end)
+        .filter((ticket_year_expr != selected_year) | (ticket_month_expr != selected_month))
+    )
+    if role == "client":
+        activity_scope = activity_scope.filter(Ticket.client_id == user_id)
+
+    total_hours = 0.0
+    for activity in activity_scope.all():
+        overlap_start = max(activity.started_at, period_start)
+        overlap_end = min(activity.ended_at, period_end)
+        total_hours += max((overlap_end - overlap_start).total_seconds() / 3600, 0)
+
+    return round(total_hours, 2)
 
 
 def build_activity_report(
@@ -821,6 +869,64 @@ def manage_system_modules():
     return render_template("system_modules.html", modules=modules)
 
 
+@app.route("/admin/payments", methods=["GET", "POST"])
+@login_required
+def manage_payments():
+    if not session.get("is_superuser", False):
+        flash("Apenas superuser pode acessar esta página.", "danger")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        paid_at_raw = request.form.get("paid_at", "").strip()
+        amount_raw = request.form.get("amount", "").strip().replace(",", ".")
+        paid_hours_raw = request.form.get("paid_hours", "").strip().replace(",", ".")
+
+        try:
+            paid_at = datetime.strptime(paid_at_raw, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            flash("Informe uma data de pagamento válida.", "danger")
+            return redirect(url_for("manage_payments"))
+
+        try:
+            amount = float(amount_raw) if amount_raw else 0.0
+            if amount < 0:
+                raise ValueError
+        except ValueError:
+            flash("Informe um valor válido para o pagamento.", "danger")
+            return redirect(url_for("manage_payments"))
+
+        try:
+            paid_hours = float(paid_hours_raw) if paid_hours_raw else 0.0
+            if paid_hours < 0:
+                raise ValueError
+        except ValueError:
+            flash("Informe a quantidade de horas pagas de forma válida.", "danger")
+            return redirect(url_for("manage_payments"))
+
+        payment = PaymentRecord(paid_at=paid_at, amount=amount, paid_hours=paid_hours)
+        db.session.add(payment)
+        db.session.commit()
+        flash("Pagamento registrado com sucesso.", "success")
+        return redirect(url_for("manage_payments"))
+
+    payments = PaymentRecord.query.order_by(PaymentRecord.paid_at.desc(), PaymentRecord.created_at.desc()).all()
+    return render_template("payments.html", payments=payments)
+
+
+@app.route("/admin/payments/<int:payment_id>/delete", methods=["POST"])
+@login_required
+def delete_payment(payment_id: int):
+    if not session.get("is_superuser", False):
+        flash("Apenas superuser pode acessar esta página.", "danger")
+        return redirect(url_for("dashboard"))
+
+    payment = PaymentRecord.query.get_or_404(payment_id)
+    db.session.delete(payment)
+    db.session.commit()
+    flash("Registro de pagamento excluído com sucesso.", "success")
+    return redirect(url_for("manage_payments"))
+
+
 @app.route("/admin/system-modules/<int:module_id>/toggle", methods=["POST"])
 @login_required
 def toggle_system_module(module_id: int):
@@ -961,6 +1067,12 @@ def dashboard():
 
     period_scope_query = scope_query.filter(year_expr == selected_year, month_expr == selected_month)
     total_hours_sum = round(sum(ticket.total_hours for ticket in period_scope_query.all()), 2)
+    external_ticket_activity_hours = calculate_external_ticket_activity_hours(
+        selected_year=selected_year,
+        selected_month=selected_month,
+        user_id=user_id,
+        role=role,
+    )
 
     tickets_query = period_scope_query
     if selected_status == "nao_concluidos":
@@ -970,11 +1082,12 @@ def dashboard():
 
     tickets = tickets_query.order_by(Ticket.created_at.desc()).all()
     tickets_hours_sum = round(sum(ticket.total_hours for ticket in tickets), 2)
-    accumulated_hours_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
+    accumulated_hours_total, _paid_hours_cycle_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
         user_id=user_id,
         role=role,
         reference=today,
     )
+    paid_hours_period_total = calculate_paid_hours_for_month(selected_year, selected_month)
 
     months = [
         (1, "Janeiro"),
@@ -1019,7 +1132,9 @@ def dashboard():
         status_filters=status_filters,
         status_meta=status_meta,
         total_hours_sum=total_hours_sum,
+        external_ticket_activity_hours=external_ticket_activity_hours,
         accumulated_hours_total=accumulated_hours_total,
+        paid_hours_total=paid_hours_period_total,
         monthly_hours_allowance=monthly_hours_allowance,
         cycle_start_label=cycle_start.strftime("%d/%m/%Y"),
         cycle_end_label=cycle_end.strftime("%d/%m/%Y"),
@@ -1215,11 +1330,12 @@ def export_services_report_pdf():
     role = session["role"]
     rows, total_hours = build_services_report_rows(selected_year, selected_month, user_id, role)
     reference = datetime.now()
-    accumulated_hours_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
+    accumulated_hours_total, _paid_hours_cycle_total, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
         user_id=user_id,
         role=role,
         reference=reference,
     )
+    paid_hours_period_total = calculate_paid_hours_for_month(selected_year, selected_month)
 
     company_logo = get_system_parameter("company_logo")
     company_name = get_system_parameter("company_name", "Hope Desk")
@@ -1291,11 +1407,12 @@ def export_services_report_pdf():
     ]]
 
     for row in rows:
+        service_text = f"Chamado: {row['title']}\n\n{row['service']}"
         table_data.append(
             [
                 f"#{row['ticket_id']}",
                 row["last_activity_at"].strftime("%d/%m/%Y %H:%M"),
-                Paragraph(row["title"], styles["BodyText"]),
+                Paragraph(escape(service_text).replace("\n", "<br/>"), styles["BodyText"]),
                 row["status"],
                 row["client_name"],
                 row["technician_name"],
@@ -1349,6 +1466,7 @@ def export_services_report_pdf():
         Paragraph(
             (
                 f"<b>Totais de horas no período:</b> {total_hours:.2f}<br/>"
+                f"<b>Horas pagas no período selecionado:</b> {paid_hours_period_total:.2f} h<br/>"
                 f"<b>Total acumulado no banco de horas:</b> {accumulated_hours_total:.2f} h "
                 f"(franquia mensal: {monthly_hours_allowance:.2f} h)<br/>"
                 f"<b>Ciclo do banco de horas:</b> {cycle_start.strftime('%d/%m/%Y')} "
