@@ -1,0 +1,603 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h3 mb-0">Painel de Indicadores</h1>
+    <small class="text-muted">Visão de {{ month_label }} de {{ selected_year }}</small>
+  </div>
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <a href="{{ url_for('dashboard', month=selected_month, year=selected_year) }}" class="btn btn-outline-primary">Ver chamados</a>
+    <a href="{{ url_for('new_ticket') }}" class="btn btn-primary">Novo chamado</a>
+  </div>
+</div>
+
+<form method="get" class="card p-3 mb-3 border-0 shadow-sm">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-4">
+      <label for="month" class="form-label mb-1">Mês</label>
+      <select id="month" name="month" class="form-select">
+        {% for month_value, month_name in months %}
+          <option value="{{ month_value }}" {% if selected_month == month_value %}selected{% endif %}>{{ month_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-3">
+      <label for="year" class="form-label mb-1">Ano</label>
+      <select id="year" name="year" class="form-select">
+        {% for year in available_years %}
+          <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>{{ year }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-auto">
+      <button type="submit" class="btn btn-filter-action">Aplicar período</button>
+    </div>
+    <div class="col-12 col-md-auto ms-md-auto">
+      <button type="button" id="clear-filters" class="btn btn-outline-secondary d-none">Limpar filtros</button>
+    </div>
+  </div>
+  <div id="filter-chips" class="d-flex flex-wrap gap-2 mt-2 d-none"></div>
+  <small class="text-muted mt-2 mb-0">Dica: clique nas fatias e barras dos gráficos para filtrar todo o painel.</small>
+</form>
+
+<div id="insights-banner" class="insight-banner d-none mb-3"></div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-blue h-100">
+      <span class="kpi-label">Chamados no período</span>
+      <span class="kpi-value" id="kpi-total">0</span>
+      <span class="kpi-foot" id="kpi-total-foot">&nbsp;</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-green h-100">
+      <span class="kpi-label">Taxa de conclusão</span>
+      <span class="kpi-value" id="kpi-done-rate">0%</span>
+      <span class="kpi-foot" id="kpi-done-foot">&nbsp;</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-red h-100">
+      <span class="kpi-label">Pendentes no período</span>
+      <span class="kpi-value" id="kpi-pending">0</span>
+      <span class="kpi-foot" id="kpi-pending-foot">&nbsp;</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-yellow h-100">
+      <span class="kpi-label">Horas trabalhadas</span>
+      <span class="kpi-value" id="kpi-hours">0</span>
+      <span class="kpi-foot" id="kpi-hours-foot">&nbsp;</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-blue h-100">
+      <span class="kpi-label">1ª resposta média</span>
+      <span class="kpi-value" id="kpi-response">-</span>
+      <span class="kpi-foot">do chamado à 1ª atividade</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="card kpi-card kpi-accent-gray h-100">
+      <span class="kpi-label">Idade média (abertos)</span>
+      <span class="kpi-value" id="kpi-age">-</span>
+      <span class="kpi-foot">chamados não concluídos</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-xl-3">
+    <div class="card kpi-card kpi-static h-100">
+      <span class="kpi-label">Backlog em aberto (geral)</span>
+      <span class="kpi-value">{{ backlog_total }}</span>
+      <span class="kpi-foot">{% if backlog_total %}mais antigo há {{ backlog_oldest_days }} dia{{ 's' if backlog_oldest_days != 1 }}{% else %}nenhum chamado pendente{% endif %}</span>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card kpi-card kpi-static h-100">
+      <span class="kpi-label">Banco de horas acumulado</span>
+      <span class="kpi-value">{{ '%.2f'|format(accumulated_hours_total) }} h</span>
+      <span class="kpi-foot">ciclo {{ cycle_start_label }} a {{ cycle_end_label }}</span>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card kpi-card kpi-static h-100">
+      <span class="kpi-label">Horas pagas no mês</span>
+      <span class="kpi-value">{{ '%.2f'|format(paid_hours_total) }} h</span>
+      <span class="kpi-foot">pagamentos registrados no período</span>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="card kpi-card kpi-static h-100">
+      <span class="kpi-label">Franquia mensal</span>
+      <span class="kpi-value">{{ '%.2f'|format(monthly_hours_allowance) }} h</span>
+      <span class="kpi-foot">horas contratadas por mês</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-4">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Chamados por status</h2>
+      <div class="chart-box chart-box-tall"><canvas id="chart-status"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-8">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Atividade diária em {{ month_label }}/{{ selected_year }}</h2>
+      <div class="chart-box chart-box-tall"><canvas id="chart-daily"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-6">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Chamados por módulo</h2>
+      <div class="chart-box"><canvas id="chart-modules"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Horas por técnico</h2>
+      <div class="chart-box"><canvas id="chart-techs"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 {% if role != 'client' %}col-lg-8{% endif %}">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Tendência — últimos 12 meses <small class="text-muted fw-normal">(clique em um mês para navegar)</small></h2>
+      <div class="chart-box"><canvas id="chart-trend"></canvas></div>
+    </div>
+  </div>
+  {% if role != 'client' %}
+  <div class="col-12 col-lg-4">
+    <div class="card chart-card h-100">
+      <h2 class="chart-title">Top clientes</h2>
+      <div class="chart-box"><canvas id="chart-clients"></canvas></div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card chart-card mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <h2 class="chart-title mb-0">Chamados do período <span class="badge bg-light text-dark fw-normal" id="table-count"></span></h2>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle analytics-table mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Título</th>
+          <th>Status</th>
+          <th>Módulo</th>
+          <th>Cliente</th>
+          <th>Técnico</th>
+          <th>Abertura</th>
+          <th class="text-end">Horas</th>
+        </tr>
+      </thead>
+      <tbody id="tickets-table-body"></tbody>
+    </table>
+  </div>
+  <div id="table-empty" class="text-center text-muted py-4 d-none">Nenhum chamado encontrado com os filtros atuais.</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const HD = {
+    tickets: {{ tickets_data|tojson }},
+    activities: {{ activities_data|tojson }},
+    trend: {{ trend_data|tojson }},
+    statusMeta: {{ status_meta|tojson }},
+    daysInMonth: {{ days_in_month }},
+    ticketDetailUrl: {{ url_for('ticket_detail', ticket_id=0)|tojson }},
+    analyticsUrl: {{ url_for('analytics_dashboard')|tojson }},
+  };
+
+  const STATUS_ORDER = ["aberto", "em_andamento", "resolvido", "fechado"];
+  const PALETTE = ["#0c4e9a", "#ffcc00", "#1f9d55", "#d92120", "#7c3aed", "#0ea5e9", "#f97316", "#14b8a6", "#64748b", "#a855f7", "#84cc16", "#e11d48"];
+  const filters = { status: null, module: null, tech: null, client: null, day: null };
+  const FILTER_LABELS = { status: "Status", module: "Módulo", tech: "Técnico", client: "Cliente", day: "Dia" };
+
+  const fmt = (value, digits) =>
+    Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: digits ?? 0, maximumFractionDigits: digits ?? 2 });
+
+  const esc = (value) =>
+    String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function fmtDuration(hours) {
+    if (hours == null) return "-";
+    if (hours >= 48) return fmt(hours / 24, 1) + " d";
+    if (hours >= 1) return fmt(hours, 1) + " h";
+    return fmt(hours * 60, 0) + " min";
+  }
+
+  function ticketMatches(ticket, skipDim) {
+    if (skipDim !== "status" && filters.status && ticket.status !== filters.status) return false;
+    if (skipDim !== "module" && filters.module && ticket.module !== filters.module) return false;
+    if (skipDim !== "tech" && filters.tech && !ticket.techs.includes(filters.tech)) return false;
+    if (skipDim !== "client" && filters.client && ticket.client !== filters.client) return false;
+    if (skipDim !== "day" && filters.day && ticket.day !== filters.day) return false;
+    return true;
+  }
+
+  function activityMatches(activity, skipDim) {
+    if (skipDim !== "status" && filters.status && activity.status !== filters.status) return false;
+    if (skipDim !== "module" && filters.module && activity.module !== filters.module) return false;
+    if (skipDim !== "tech" && filters.tech && activity.tech !== filters.tech) return false;
+    if (skipDim !== "client" && filters.client && activity.client !== filters.client) return false;
+    if (skipDim !== "day" && filters.day && activity.day !== filters.day) return false;
+    return true;
+  }
+
+  const filteredTickets = (skipDim) => HD.tickets.filter((t) => ticketMatches(t, skipDim));
+  const filteredActivities = (skipDim) => HD.activities.filter((a) => activityMatches(a, skipDim));
+
+  function countBy(items, key) {
+    const map = new Map();
+    items.forEach((item) => map.set(item[key], (map.get(item[key]) || 0) + 1));
+    return map;
+  }
+
+  function sumHoursBy(items, key) {
+    const map = new Map();
+    items.forEach((item) => map.set(item[key], (map.get(item[key]) || 0) + item.hours));
+    return map;
+  }
+
+  function dimColors(baseColors, categories, activeValue) {
+    return baseColors.map((color, index) =>
+      activeValue && categories[index] !== activeValue ? color + "33" : color
+    );
+  }
+
+  function toggleFilter(dim, value) {
+    filters[dim] = filters[dim] === value ? null : value;
+    updateAll();
+  }
+
+  // Categorias fixas (dataset completo) para os eixos não "pularem" ao filtrar.
+  const moduleCats = [...countBy(HD.tickets, "module").entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+  const techCats = [...sumHoursBy(HD.activities, "tech").entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+  const clientCats = [...countBy(HD.tickets, "client").entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map((e) => e[0]);
+  const dayLabels = Array.from({ length: HD.daysInMonth }, (_, i) => i + 1);
+
+  Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+  Chart.defaults.color = "#475467";
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
+  function clickHandler(dim, categories) {
+    return (event, elements) => {
+      if (!elements.length) return;
+      toggleFilter(dim, categories[elements[0].index]);
+    };
+  }
+
+  const hoverCursor = (event, elements) => {
+    event.native.target.style.cursor = elements.length ? "pointer" : "default";
+  };
+
+  const statusChart = new Chart(document.getElementById("chart-status"), {
+    type: "doughnut",
+    data: {
+      labels: STATUS_ORDER.map((s) => HD.statusMeta[s].label),
+      datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: "#ffffff" }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%",
+      onClick: clickHandler("status", STATUS_ORDER),
+      onHover: hoverCursor,
+      plugins: { legend: { position: "bottom" } },
+    },
+  });
+
+  const dailyChart = new Chart(document.getElementById("chart-daily"), {
+    data: {
+      labels: dayLabels,
+      datasets: [
+        {
+          type: "bar",
+          label: "Chamados abertos",
+          data: [],
+          backgroundColor: "#0c4e9a",
+          borderRadius: 4,
+          yAxisID: "y",
+        },
+        {
+          type: "line",
+          label: "Horas trabalhadas",
+          data: [],
+          borderColor: "#fec700",
+          backgroundColor: "#fec70033",
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: clickHandler("day", dayLabels),
+      onHover: hoverCursor,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Chamados" } },
+        y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Horas" } },
+      },
+    },
+  });
+
+  const modulesChart = new Chart(document.getElementById("chart-modules"), {
+    type: "bar",
+    data: { labels: moduleCats, datasets: [{ label: "Chamados", data: [], borderRadius: 5 }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: clickHandler("module", moduleCats),
+      onHover: hoverCursor,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+
+  const techsChart = new Chart(document.getElementById("chart-techs"), {
+    type: "bar",
+    data: { labels: techCats, datasets: [{ label: "Horas", data: [], borderRadius: 5 }] },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: clickHandler("tech", techCats),
+      onHover: hoverCursor,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => fmt(ctx.parsed.x, 2) + " h" } },
+      },
+      scales: { x: { beginAtZero: true } },
+    },
+  });
+
+  const clientsCanvas = document.getElementById("chart-clients");
+  const clientsChart = clientsCanvas
+    ? new Chart(clientsCanvas, {
+        type: "bar",
+        data: { labels: clientCats, datasets: [{ label: "Chamados", data: [], borderRadius: 5 }] },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: clickHandler("client", clientCats),
+          onHover: hoverCursor,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      })
+    : null;
+
+  new Chart(document.getElementById("chart-trend"), {
+    data: {
+      labels: HD.trend.map((row) => row.label),
+      datasets: [
+        {
+          type: "bar",
+          label: "Chamados abertos",
+          data: HD.trend.map((row) => row.tickets),
+          backgroundColor: HD.trend.map((_, i) => (i === HD.trend.length - 1 ? "#0c4e9a" : "#0c4e9a99")),
+          borderRadius: 4,
+          yAxisID: "y",
+        },
+        {
+          type: "line",
+          label: "Horas trabalhadas",
+          data: HD.trend.map((row) => row.hours),
+          borderColor: "#d92120",
+          backgroundColor: "#d9212022",
+          tension: 0.35,
+          pointRadius: 3,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onHover: hoverCursor,
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const row = HD.trend[elements[0].index];
+        window.location.href = HD.analyticsUrl + "?year=" + row.year + "&month=" + row.month;
+      },
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: "Chamados" } },
+        y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Horas" } },
+      },
+    },
+  });
+
+  function updateKpis() {
+    const tickets = filteredTickets(null);
+    const activities = filteredActivities(null);
+    const done = tickets.filter((t) => t.status === "resolvido" || t.status === "fechado").length;
+    const pending = tickets.length - done;
+    const hours = activities.reduce((acc, a) => acc + a.hours, 0);
+    const responses = tickets.map((t) => t.response_hours).filter((v) => v != null);
+    const ages = tickets.map((t) => t.age_days).filter((v) => v != null);
+
+    document.getElementById("kpi-total").textContent = tickets.length;
+    document.getElementById("kpi-total-foot").textContent = "abertos em " + "{{ month_label }}".toLowerCase();
+    document.getElementById("kpi-done-rate").textContent = tickets.length ? Math.round((done / tickets.length) * 100) + "%" : "-";
+    document.getElementById("kpi-done-foot").textContent = done + " concluído" + (done === 1 ? "" : "s");
+    document.getElementById("kpi-pending").textContent = pending;
+    document.getElementById("kpi-pending-foot").textContent = "em aberto ou em andamento";
+    document.getElementById("kpi-hours").textContent = fmt(hours, 1) + " h";
+    document.getElementById("kpi-hours-foot").textContent =
+      tickets.length ? "média de " + fmt(hours / tickets.length, 1) + " h/chamado" : " ";
+    document.getElementById("kpi-response").textContent = responses.length
+      ? fmtDuration(responses.reduce((a, b) => a + b, 0) / responses.length)
+      : "-";
+    document.getElementById("kpi-age").textContent = ages.length
+      ? fmt(ages.reduce((a, b) => a + b, 0) / ages.length, 1) + " d"
+      : "-";
+  }
+
+  function updateCharts() {
+    const statusCounts = countBy(filteredTickets("status"), "status");
+    statusChart.data.datasets[0].data = STATUS_ORDER.map((s) => statusCounts.get(s) || 0);
+    statusChart.data.datasets[0].backgroundColor = dimColors(
+      STATUS_ORDER.map((s) => HD.statusMeta[s].color),
+      STATUS_ORDER,
+      filters.status
+    );
+    statusChart.update();
+
+    const dayTickets = countBy(filteredTickets("day"), "day");
+    const dayHours = sumHoursBy(filteredActivities("day"), "day");
+    dailyChart.data.datasets[0].data = dayLabels.map((d) => dayTickets.get(d) || 0);
+    dailyChart.data.datasets[1].data = dayLabels.map((d) => Math.round((dayHours.get(d) || 0) * 100) / 100);
+    dailyChart.data.datasets[0].backgroundColor = dayLabels.map((d) =>
+      filters.day && d !== filters.day ? "#0c4e9a33" : "#0c4e9a"
+    );
+    dailyChart.update();
+
+    const moduleCounts = countBy(filteredTickets("module"), "module");
+    modulesChart.data.datasets[0].data = moduleCats.map((m) => moduleCounts.get(m) || 0);
+    modulesChart.data.datasets[0].backgroundColor = dimColors(
+      moduleCats.map((_, i) => PALETTE[i % PALETTE.length]),
+      moduleCats,
+      filters.module
+    );
+    modulesChart.update();
+
+    const techHours = sumHoursBy(filteredActivities("tech"), "tech");
+    techsChart.data.datasets[0].data = techCats.map((t) => Math.round((techHours.get(t) || 0) * 100) / 100);
+    techsChart.data.datasets[0].backgroundColor = dimColors(
+      techCats.map((_, i) => PALETTE[(i + 4) % PALETTE.length]),
+      techCats,
+      filters.tech
+    );
+    techsChart.update();
+
+    if (clientsChart) {
+      const clientCounts = countBy(filteredTickets("client"), "client");
+      clientsChart.data.datasets[0].data = clientCats.map((c) => clientCounts.get(c) || 0);
+      clientsChart.data.datasets[0].backgroundColor = dimColors(
+        clientCats.map((_, i) => PALETTE[(i + 2) % PALETTE.length]),
+        clientCats,
+        filters.client
+      );
+      clientsChart.update();
+    }
+  }
+
+  function updateChips() {
+    const container = document.getElementById("filter-chips");
+    const clearBtn = document.getElementById("clear-filters");
+    const active = Object.entries(filters).filter(([, value]) => value !== null);
+    container.innerHTML = "";
+    container.classList.toggle("d-none", !active.length);
+    clearBtn.classList.toggle("d-none", !active.length);
+
+    active.forEach(([dim, value]) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "filter-chip";
+      const label = dim === "status" ? HD.statusMeta[value].label : dim === "day" ? "dia " + value : value;
+      chip.innerHTML = "<strong>" + FILTER_LABELS[dim] + ":</strong> " + esc(label) + " <span aria-hidden='true'>&times;</span>";
+      chip.addEventListener("click", () => toggleFilter(dim, value));
+      container.appendChild(chip);
+    });
+  }
+
+  function updateTable() {
+    const body = document.getElementById("tickets-table-body");
+    const empty = document.getElementById("table-empty");
+    const tickets = filteredTickets(null).slice(0, 30);
+    document.getElementById("table-count").textContent = filteredTickets(null).length + " chamado(s)";
+    body.innerHTML = "";
+    empty.classList.toggle("d-none", tickets.length > 0);
+
+    const pillClass = { aberto: "status-open", em_andamento: "status-progress", resolvido: "status-done", fechado: "status-done" };
+    tickets.forEach((ticket) => {
+      const row = document.createElement("tr");
+      row.className = "analytics-table-row";
+      row.innerHTML =
+        "<td class='text-muted'>#" + ticket.id + "</td>" +
+        "<td class='fw-semibold'></td>" +
+        "<td><span class='status-pill " + (pillClass[ticket.status] || "status-unknown") + "'>" + esc((HD.statusMeta[ticket.status] || { label: ticket.status }).label) + "</span></td>" +
+        "<td></td><td></td><td></td>" +
+        "<td class='text-muted'>" + ticket.created_label + "</td>" +
+        "<td class='text-end'>" + fmt(ticket.hours, 2) + " h</td>";
+      row.children[1].textContent = ticket.title;
+      row.children[3].textContent = ticket.module;
+      row.children[4].textContent = ticket.client;
+      row.children[5].textContent = ticket.tech;
+      row.addEventListener("click", () => {
+        window.location.href = HD.ticketDetailUrl.replace("/0", "/" + ticket.id);
+      });
+      body.appendChild(row);
+    });
+  }
+
+  function updateInsights() {
+    const banner = document.getElementById("insights-banner");
+    const insights = [];
+    const tickets = HD.tickets;
+    const totalHours = HD.activities.reduce((acc, a) => acc + a.hours, 0);
+
+    if (tickets.length) {
+      const topModule = [...countBy(tickets, "module").entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topModule && topModule[1] > 1) {
+        insights.push(
+          "📌 O módulo <strong>" + esc(topModule[0]) + "</strong> concentra <strong>" +
+          Math.round((topModule[1] / tickets.length) * 100) + "%</strong> dos chamados do período."
+        );
+      }
+      const dayCounts = [...countBy(tickets, "day").entries()].sort((a, b) => b[1] - a[1])[0];
+      if (dayCounts && dayCounts[1] > 1) {
+        insights.push("📅 O dia <strong>" + dayCounts[0] + "</strong> foi o de maior abertura, com <strong>" + dayCounts[1] + "</strong> chamados.");
+      }
+    }
+    if (totalHours > 0) {
+      const topTech = [...sumHoursBy(HD.activities, "tech").entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topTech) {
+        insights.push(
+          "🛠️ <strong>" + esc(topTech[0]) + "</strong> realizou <strong>" + fmt(topTech[1], 1) +
+          " h</strong> (" + Math.round((topTech[1] / totalHours) * 100) + "% das horas do período)."
+        );
+      }
+    }
+
+    banner.classList.toggle("d-none", !insights.length);
+    banner.innerHTML = insights.map((text) => "<span class='insight-item'>" + text + "</span>").join("");
+  }
+
+  function updateAll() {
+    updateKpis();
+    updateCharts();
+    updateChips();
+    updateTable();
+  }
+
+  document.getElementById("clear-filters").addEventListener("click", () => {
+    Object.keys(filters).forEach((dim) => (filters[dim] = null));
+    updateAll();
+  });
+
+  updateInsights();
+  updateAll();
+})();
+</script>
+{% endblock %}

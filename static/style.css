@@ -451,6 +451,139 @@ body {
   background: #fee4e2;
 }
 
+.app-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 1rem;
+  margin-right: auto;
+}
+
+.app-nav-link {
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.55rem;
+  color: #234783;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.app-nav-link:hover {
+  background: #e3edfb;
+  color: #0c4e9a;
+}
+
+.app-nav-link.active {
+  background: var(--brand-blue);
+  color: #ffffff;
+}
+
+.kpi-card {
+  padding: 0.85rem 1rem;
+  border-left: 4px solid var(--brand-blue);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06);
+}
+
+.kpi-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #667085;
+}
+
+.kpi-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #1f2a44;
+  line-height: 1.2;
+}
+
+.kpi-foot {
+  font-size: 0.74rem;
+  color: #98a2b3;
+}
+
+.kpi-accent-blue { border-left-color: var(--brand-blue); }
+.kpi-accent-green { border-left-color: #1f9d55; }
+.kpi-accent-red { border-left-color: var(--brand-red); }
+.kpi-accent-yellow { border-left-color: var(--brand-yellow-strong); }
+.kpi-accent-gray { border-left-color: #98a2b3; }
+
+.kpi-static {
+  border-left-color: #c9d9ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
+}
+
+.chart-card {
+  padding: 1rem 1.1rem;
+  border: none;
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06);
+}
+
+.chart-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f2a44;
+  margin-bottom: 0.75rem;
+}
+
+.chart-box {
+  position: relative;
+  height: 260px;
+}
+
+.chart-box-tall {
+  height: 300px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--brand-blue);
+  border-radius: 999px;
+  background: #e3edfb;
+  color: #234783;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  background: var(--brand-blue);
+  color: #ffffff;
+}
+
+.filter-chip span {
+  font-weight: 700;
+}
+
+.insight-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid #f3dd9d;
+  border-left: 4px solid var(--brand-yellow-strong);
+  border-radius: 0.75rem;
+  background: #fffaeb;
+  color: #4d3b00;
+  font-size: 0.88rem;
+}
+
+.analytics-table thead th {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #667085;
+  border-bottom-width: 2px;
+}
+
+.analytics-table-row {
+  cursor: pointer;
+}
+
 @media (min-width: 576px) {
   .ticket-menu-panel {
     min-width: 155px;

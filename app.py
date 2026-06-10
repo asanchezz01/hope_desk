@@ -825,7 +825,7 @@ def validate_activity_period(started_at: datetime, ended_at: datetime) -> str | 
 @app.route("/")
 def home():
     if "user_id" in session:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("analytics_dashboard"))
     return redirect(url_for("login"))
 
 
@@ -1132,7 +1132,7 @@ def login():
             return redirect(url_for("change_password"))
 
         flash("Login realizado com sucesso.", "success")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("analytics_dashboard"))
 
     return render_template("login.html")
 
@@ -1228,6 +1228,273 @@ def change_password():
     return render_template(
         "change_password.html",
         forced=session.get("must_change_password", False),
+    )
+
+
+MONTHS_PT = [
+    (1, "Janeiro"),
+    (2, "Fevereiro"),
+    (3, "Março"),
+    (4, "Abril"),
+    (5, "Maio"),
+    (6, "Junho"),
+    (7, "Julho"),
+    (8, "Agosto"),
+    (9, "Setembro"),
+    (10, "Outubro"),
+    (11, "Novembro"),
+    (12, "Dezembro"),
+]
+
+ANALYTICS_STATUS_META = {
+    "aberto": {"label": "Em aberto", "color": "#d92120"},
+    "em_andamento": {"label": "Em andamento", "color": "#ffcc00"},
+    "resolvido": {"label": "Concluído", "color": "#1f9d55"},
+    "fechado": {"label": "Fechado", "color": "#234783"},
+}
+
+
+def clip_hours(activity: Activity, window_start: datetime, window_end: datetime) -> tuple[datetime, float]:
+    overlap_start = max(activity.started_at, window_start)
+    overlap_end = min(activity.ended_at, window_end)
+    hours = max((overlap_end - overlap_start).total_seconds() / 3600, 0)
+    return overlap_start, hours
+
+
+@app.route("/analytics")
+@login_required
+def analytics_dashboard():
+    user_id = session["user_id"]
+    role = session["role"]
+    today = datetime.now()
+
+    # Mês e ano podem ficar em branco: sem mês = visão anual; sem ano = todo o período.
+    month_raw = request.args.get("month")
+    year_raw = request.args.get("year")
+    if month_raw is None and year_raw is None:
+        selected_year: int | None = today.year
+        selected_month: int | None = today.month
+    else:
+        try:
+            selected_year = int(year_raw) if year_raw else None
+        except (TypeError, ValueError):
+            selected_year = today.year
+        try:
+            selected_month = int(month_raw) if month_raw else None
+        except (TypeError, ValueError):
+            selected_month = None
+        if selected_month is not None and not 1 <= selected_month <= 12:
+            selected_month = None
+        if selected_year is None:
+            selected_month = None
+
+    if role == "client":
+        ticket_scope = Ticket.query.filter_by(client_id=user_id)
+    else:
+        ticket_scope = Ticket.query
+
+    if selected_year is None:
+        earliest_ticket = ticket_scope.order_by(Ticket.created_at.asc()).first()
+        if earliest_ticket:
+            period_start = datetime(earliest_ticket.created_at.year, earliest_ticket.created_at.month, 1)
+        else:
+            period_start = datetime(today.year, 1, 1)
+        period_end = month_period_bounds(today.year, today.month)[1]
+    elif selected_month is None:
+        period_start = datetime(selected_year, 1, 1)
+        period_end = datetime(selected_year + 1, 1, 1)
+    else:
+        period_start, period_end = month_period_bounds(selected_year, selected_month)
+
+    month_names = dict(MONTHS_PT)
+    month_short_names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+    if selected_month is not None:
+        bucket_mode = "day"
+        buckets = [
+            {"key": day, "label": str(day)}
+            for day in range(1, calendar.monthrange(selected_year, selected_month)[1] + 1)
+        ]
+
+        def bucket_of(moment: datetime):
+            return moment.day
+
+        period_label = f"{month_names[selected_month]} de {selected_year}"
+        activity_chart_title = f"Atividade diária em {month_names[selected_month]}/{selected_year}"
+        period_foot = f"abertos em {month_names[selected_month].lower()}"
+    else:
+        bucket_mode = "month"
+        buckets = []
+        cursor = period_start
+        while cursor < period_end:
+            label = month_short_names[cursor.month - 1]
+            if selected_year is None:
+                label = f"{label}/{str(cursor.year)[2:]}"
+            buckets.append({"key": f"{cursor.year}-{cursor.month:02d}", "label": label})
+            cursor = add_months(cursor, 1)
+
+        def bucket_of(moment: datetime):
+            return f"{moment.year}-{moment.month:02d}"
+
+        if selected_year is not None:
+            period_label = f"ano de {selected_year}"
+            activity_chart_title = f"Atividade mensal em {selected_year}"
+            period_foot = f"abertos em {selected_year}"
+        else:
+            period_label = "todo o período"
+            activity_chart_title = "Atividade mensal — todo o período"
+            period_foot = "no período completo"
+
+    year_expr = db.extract("year", Ticket.created_at)
+    year_rows = (
+        ticket_scope.with_entities(year_expr.label("year"))
+        .distinct()
+        .order_by(year_expr.desc())
+        .all()
+    )
+    available_years = [int(year_row[0]) for year_row in year_rows if year_row[0] is not None]
+    if today.year not in available_years:
+        available_years.insert(0, today.year)
+
+    period_tickets = (
+        ticket_scope.filter(Ticket.created_at >= period_start, Ticket.created_at < period_end)
+        .order_by(Ticket.created_at.desc())
+        .all()
+    )
+
+    activity_scope = Activity.query.join(Ticket, Activity.ticket_id == Ticket.id).filter(
+        Activity.ended_at > period_start,
+        Activity.started_at < period_end,
+    )
+    if role == "client":
+        activity_scope = activity_scope.filter(Ticket.client_id == user_id)
+    period_activities = activity_scope.all()
+
+    activities_data: list[dict] = []
+    ticket_activity_techs: dict[int, set[str]] = defaultdict(set)
+    for activity in period_activities:
+        ticket = activity.ticket
+        if not ticket:
+            continue
+        overlap_start, hours = clip_hours(activity, period_start, period_end)
+        if hours <= 0:
+            continue
+        tech_name = activity.created_by.name if activity.created_by else "Técnico não informado"
+        ticket_activity_techs[ticket.id].add(tech_name)
+        activities_data.append(
+            {
+                "ticket_id": ticket.id,
+                "bucket": bucket_of(overlap_start),
+                "tech": tech_name,
+                "hours": round(hours, 2),
+                "status": ticket.status,
+                "module": ticket.system_module.name if ticket.system_module else "Sem módulo",
+                "client": ticket.client.name if ticket.client else "-",
+            }
+        )
+
+    tickets_data: list[dict] = []
+    for ticket in period_tickets:
+        first_activity = min(ticket.activities, key=lambda item: item.started_at) if ticket.activities else None
+        response_hours = None
+        if first_activity:
+            response_hours = round(
+                max((first_activity.started_at - ticket.created_at).total_seconds() / 3600, 0), 2
+            )
+
+        techs = set(ticket_activity_techs.get(ticket.id, set()))
+        if ticket.technician:
+            techs.add(ticket.technician.name)
+
+        is_concluded = ticket.status in {"resolvido", "fechado"}
+        tickets_data.append(
+            {
+                "id": ticket.id,
+                "title": ticket.title,
+                "status": ticket.status,
+                "module": ticket.system_module.name if ticket.system_module else "Sem módulo",
+                "client": ticket.client.name if ticket.client else "-",
+                "tech": ticket.technician.name if ticket.technician else "-",
+                "techs": sorted(techs),
+                "bucket": bucket_of(ticket.created_at),
+                "created_label": ticket.created_at.strftime("%d/%m/%Y %H:%M"),
+                "hours": ticket.total_hours,
+                "response_hours": response_hours,
+                "age_days": None if is_concluded else max((today - ticket.created_at).days, 0),
+            }
+        )
+
+    # Tendência dos últimos 12 meses encerrando no período selecionado.
+    trend_start = add_months(period_start, -11)
+    trend_counts: dict[tuple[int, int], int] = defaultdict(int)
+    trend_ticket_rows = ticket_scope.filter(
+        Ticket.created_at >= trend_start, Ticket.created_at < period_end
+    ).all()
+    for ticket in trend_ticket_rows:
+        trend_counts[(ticket.created_at.year, ticket.created_at.month)] += 1
+
+    trend_hours: dict[tuple[int, int], float] = defaultdict(float)
+    trend_activity_scope = Activity.query.join(Ticket, Activity.ticket_id == Ticket.id).filter(
+        Activity.ended_at > trend_start,
+        Activity.started_at < period_end,
+    )
+    if role == "client":
+        trend_activity_scope = trend_activity_scope.filter(Ticket.client_id == user_id)
+    for activity in trend_activity_scope.all():
+        overlap_start = max(activity.started_at, trend_start)
+        overlap_end = min(activity.ended_at, period_end)
+        cursor = overlap_start
+        while cursor < overlap_end:
+            month_end = month_period_bounds(cursor.year, cursor.month)[1]
+            segment_end = min(overlap_end, month_end)
+            trend_hours[(cursor.year, cursor.month)] += (segment_end - cursor).total_seconds() / 3600
+            cursor = segment_end
+
+    trend_data: list[dict] = []
+    for offset in range(12):
+        month_ref = add_months(trend_start, offset)
+        key = (month_ref.year, month_ref.month)
+        trend_data.append(
+            {
+                "label": f"{month_ref.month:02d}/{str(month_ref.year)[2:]}",
+                "year": month_ref.year,
+                "month": month_ref.month,
+                "tickets": trend_counts.get(key, 0),
+                "hours": round(trend_hours.get(key, 0.0), 2),
+            }
+        )
+
+    backlog_query = ticket_scope.filter(Ticket.status.in_(["aberto", "em_andamento"]))
+    backlog_total = backlog_query.count()
+    oldest_open = backlog_query.order_by(Ticket.created_at.asc()).first()
+    backlog_oldest_days = max((today - oldest_open.created_at).days, 0) if oldest_open else 0
+
+    accumulated_hours_total, _paid_cycle, monthly_hours_allowance, cycle_start, cycle_end = calculate_accumulated_hours(
+        user_id=user_id,
+        role=role,
+        reference=today,
+    )
+    paid_hours_period_total = calculate_paid_hours_for_month(selected_year, selected_month)
+
+    return render_template(
+        "analytics.html",
+        role=role,
+        months=MONTHS_PT,
+        selected_month=selected_month,
+        selected_year=selected_year,
+        available_years=available_years,
+        month_label=dict(MONTHS_PT).get(selected_month, str(selected_month)),
+        days_in_month=calendar.monthrange(selected_year, selected_month)[1],
+        tickets_data=tickets_data,
+        activities_data=activities_data,
+        trend_data=trend_data,
+        status_meta=ANALYTICS_STATUS_META,
+        backlog_total=backlog_total,
+        backlog_oldest_days=backlog_oldest_days,
+        accumulated_hours_total=accumulated_hours_total,
+        monthly_hours_allowance=monthly_hours_allowance,
+        paid_hours_total=paid_hours_period_total,
+        cycle_start_label=cycle_start.strftime("%d/%m/%Y"),
+        cycle_end_label=cycle_end.strftime("%d/%m/%Y"),
     )
 
 
