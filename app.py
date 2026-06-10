@@ -1,4 +1,6 @@
 import calendar
+import hashlib
+import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
@@ -58,6 +60,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # client | technician
     is_superuser = db.Column(db.Boolean, default=False)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
+    reset_token_hash = db.Column(db.String(64), nullable=True)
+    reset_token_expires_at = db.Column(db.DateTime, nullable=True)
 
     client_tickets = db.relationship(
         "Ticket", foreign_keys="Ticket.client_id", backref="client", lazy=True
@@ -141,6 +146,28 @@ def ensure_ticket_schema_updates() -> None:
 
     with db.engine.begin() as connection:
         connection.execute(text("ALTER TABLE ticket ADD COLUMN system_module_id INTEGER"))
+
+
+def ensure_user_schema_updates() -> None:
+    inspector = inspect(db.engine)
+    if "user" not in inspector.get_table_names():
+        return
+
+    user_columns = {column["name"] for column in inspector.get_columns("user")}
+    statements = []
+    if "must_change_password" not in user_columns:
+        statements.append('ALTER TABLE "user" ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE')
+    if "reset_token_hash" not in user_columns:
+        statements.append('ALTER TABLE "user" ADD COLUMN reset_token_hash VARCHAR(64)')
+    if "reset_token_expires_at" not in user_columns:
+        statements.append('ALTER TABLE "user" ADD COLUMN reset_token_expires_at TIMESTAMP')
+
+    if not statements:
+        return
+
+    with db.engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def ensure_system_parameters() -> None:
@@ -579,6 +606,16 @@ def role_required(*roles):
     return decorator
 
 
+@app.before_request
+def enforce_password_change():
+    if "user_id" not in session or not session.get("must_change_password"):
+        return None
+    if request.endpoint in {None, "static", "change_password", "logout"}:
+        return None
+    flash("Você precisa definir uma nova senha antes de continuar.", "warning")
+    return redirect(url_for("change_password"))
+
+
 def can_delete_by_month(record_date: datetime, is_superuser: bool) -> bool:
     now = datetime.now()
     is_current_month = record_date.year == now.year and record_date.month == now.month
@@ -630,6 +667,60 @@ def send_email(recipients: list[str], subject: str, body: str) -> bool:
     except Exception:
         app.logger.exception("Falha ao enviar e-mail para %s", recipients)
         return False
+
+
+RESET_TOKEN_MAX_AGE_HOURS = 2
+
+
+def hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_password_reset_token(user: "User") -> str:
+    token = secrets.token_urlsafe(32)
+    user.reset_token_hash = hash_reset_token(token)
+    user.reset_token_expires_at = datetime.utcnow() + timedelta(hours=RESET_TOKEN_MAX_AGE_HOURS)
+    return token
+
+
+def find_user_by_reset_token(token: str) -> "User | None":
+    if not token:
+        return None
+    user = User.query.filter_by(reset_token_hash=hash_reset_token(token)).first()
+    if not user or not user.reset_token_expires_at:
+        return None
+    if user.reset_token_expires_at < datetime.utcnow():
+        return None
+    return user
+
+
+def send_password_reset_email(user: "User") -> bool:
+    if not user.email:
+        return False
+
+    token = issue_password_reset_token(user)
+    db.session.commit()
+
+    reset_url = url_for("reset_password", token=token, _external=True)
+    body = (
+        f"Ola, {user.name}.\n\n"
+        "Recebemos uma solicitacao para troca da sua senha no Hope Desk.\n\n"
+        f"Para definir uma nova senha, acesse o link abaixo (valido por {RESET_TOKEN_MAX_AGE_HOURS} horas):\n"
+        f"{reset_url}\n\n"
+        "Se voce nao solicitou a troca de senha, ignore este e-mail. Sua senha atual continua valida."
+    )
+    subject = "[Hope Desk] Troca de senha"
+    return send_email([user.email], subject, body)
+
+
+def validate_new_password(password: str, confirmation: str) -> str | None:
+    if not password or not confirmation:
+        return "Preencha a nova senha e a confirmação."
+    if len(password) < 6:
+        return "A nova senha deve ter pelo menos 6 caracteres."
+    if password != confirmation:
+        return "A confirmação não confere com a nova senha."
+    return None
 
 
 def build_ticket_external_url(ticket_id: int) -> str:
@@ -748,6 +839,7 @@ def manage_users():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         role = request.form.get("role", "client")
+        must_change_password = request.form.get("must_change_password") == "on"
 
         if role not in {"client", "technician"}:
             flash("Perfil inválido.", "danger")
@@ -766,6 +858,7 @@ def manage_users():
             email=email,
             password_hash=generate_password_hash(password),
             role=role,
+            must_change_password=must_change_password,
         )
         db.session.add(user)
         db.session.commit()
@@ -969,6 +1062,7 @@ def edit_user(user_id: int):
         user.name = name
         user.email = email
         user.role = role
+        user.must_change_password = request.form.get("must_change_password") == "on"
 
         if password:
             user.password_hash = generate_password_hash(password)
@@ -978,6 +1072,20 @@ def edit_user(user_id: int):
         return redirect(url_for("manage_users"))
 
     return render_template("edit_user.html", user=user)
+
+
+@app.route("/users/<int:user_id>/send-reset-link", methods=["POST"])
+@login_required
+@role_required("technician")
+def send_user_reset_link(user_id: int):
+    user = User.query.get_or_404(user_id)
+
+    if send_password_reset_email(user):
+        flash(f"Link de troca de senha enviado para {user.email}.", "success")
+    else:
+        flash("Não foi possível enviar o e-mail. Verifique a configuração de SMTP.", "danger")
+
+    return redirect(url_for("manage_users"))
 
 
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
@@ -1017,6 +1125,11 @@ def login():
         session["user_name"] = user.name
         session["role"] = user.role
         session["is_superuser"] = user.is_superuser
+        session["must_change_password"] = bool(user.must_change_password)
+
+        if user.must_change_password:
+            flash("Você precisa definir uma nova senha antes de continuar.", "warning")
+            return redirect(url_for("change_password"))
 
         flash("Login realizado com sucesso.", "success")
         return redirect(url_for("dashboard"))
@@ -1030,6 +1143,92 @@ def logout():
     session.clear()
     flash("Sessão encerrada.", "info")
     return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        if not email:
+            flash("Informe o e-mail cadastrado.", "danger")
+            return redirect(url_for("forgot_password"))
+
+        user = User.query.filter_by(email=email).first()
+        if user:
+            send_password_reset_email(user)
+
+        # Mensagem genérica para não revelar quais e-mails existem no sistema.
+        flash("Se o e-mail estiver cadastrado, você receberá um link para troca de senha.", "info")
+        return redirect(url_for("login"))
+
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token: str):
+    user = find_user_by_reset_token(token)
+    if not user:
+        flash("Link de troca de senha inválido ou expirado. Solicite um novo link.", "danger")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirmation = request.form.get("password_confirmation", "")
+
+        error = validate_new_password(password, confirmation)
+        if error:
+            flash(error, "danger")
+            return redirect(url_for("reset_password", token=token))
+
+        user.password_hash = generate_password_hash(password)
+        user.reset_token_hash = None
+        user.reset_token_expires_at = None
+        user.must_change_password = False
+        db.session.commit()
+
+        flash("Senha alterada com sucesso. Faça login com a nova senha.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("reset_password.html", token=token, user_email=user.email)
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    user = db.session.get(User, session["user_id"])
+    if not user:
+        session.clear()
+        flash("Faça login para continuar.", "warning")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        current_password = request.form.get("current_password", "")
+        password = request.form.get("password", "")
+        confirmation = request.form.get("password_confirmation", "")
+
+        if not check_password_hash(user.password_hash, current_password):
+            flash("Senha atual incorreta.", "danger")
+            return redirect(url_for("change_password"))
+
+        error = validate_new_password(password, confirmation)
+        if error:
+            flash(error, "danger")
+            return redirect(url_for("change_password"))
+
+        user.password_hash = generate_password_hash(password)
+        user.must_change_password = False
+        user.reset_token_hash = None
+        user.reset_token_expires_at = None
+        db.session.commit()
+        session["must_change_password"] = False
+
+        flash("Senha alterada com sucesso.", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template(
+        "change_password.html",
+        forced=session.get("must_change_password", False),
+    )
 
 
 @app.route("/dashboard")
@@ -1854,6 +2053,7 @@ def edit_activity(ticket_id: int, activity_id: int):
 def init_db() -> None:
     db.create_all()
     ensure_ticket_schema_updates()
+    ensure_user_schema_updates()
     ensure_system_parameters()
     result = ensure_superuser()
     print(f"Banco inicializado. {result}")
@@ -1863,6 +2063,7 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         ensure_ticket_schema_updates()
+        ensure_user_schema_updates()
         ensure_system_parameters()
         print(ensure_superuser())
     app.run(host="0.0.0.0", port=5000, debug=True)

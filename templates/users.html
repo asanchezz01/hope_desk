@@ -30,6 +30,12 @@
               <option value="technician">Técnico</option>
             </select>
           </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="must_change_password" id="must_change_password_add">
+            <label class="form-check-label" for="must_change_password_add">
+              Exigir troca de senha no próximo login
+            </label>
+          </div>
           <button class="btn btn-primary w-100" type="submit">Adicionar</button>
         </form>
       </div>
@@ -59,9 +65,15 @@
                   {% if user.is_superuser %}
                     <span class="badge text-bg-dark ms-1">Superuser</span>
                   {% endif %}
+                  {% if user.must_change_password %}
+                    <span class="badge text-bg-warning ms-1">Troca de senha pendente</span>
+                  {% endif %}
                 </td>
                 <td>{{ 'Cliente' if user.role == 'client' else 'Técnico' }}</td>
                 <td class="text-end">
+                  <form method="post" action="{{ url_for('send_user_reset_link', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Enviar link de troca de senha para {{ user.email }}?');">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">Enviar link de senha</button>
+                  </form>
                   <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-outline-primary btn-sm">Editar</a>
                   <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Deseja realmente excluir este usuário?');">
                     <button type="submit" class="btn btn-outline-danger btn-sm" {% if user.id == session.get('user_id') %}disabled{% endif %}>Excluir</button>

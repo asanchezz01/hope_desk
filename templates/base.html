@@ -50,6 +50,7 @@
             {% if session.get('role') == 'technician' or session.get('is_superuser') %}
               <a href="{{ url_for('manage_users') }}" class="top-actions-link">Gerenciar Usuários</a>
             {% endif %}
+            <a href="{{ url_for('change_password') }}" class="top-actions-link">Alterar Senha</a>
             <a href="{{ url_for('logout') }}" class="top-actions-link top-actions-link-danger">Sair</a>
           </div>
         </details>
