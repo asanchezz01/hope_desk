@@ -3,7 +3,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div>
     <h1 class="h3 mb-0">Painel de Indicadores</h1>
-    <small class="text-muted">Visão de {{ month_label }} de {{ selected_year }}</small>
+    <small class="text-muted">{{ period_label }}</small>
   </div>
   <div class="d-flex flex-wrap gap-2 align-items-center">
     <a href="{{ url_for('dashboard', month=selected_month, year=selected_year) }}" class="btn btn-outline-primary">Ver chamados</a>
@@ -16,6 +16,7 @@
     <div class="col-12 col-md-4">
       <label for="month" class="form-label mb-1">Mês</label>
       <select id="month" name="month" class="form-select">
+        <option value="" {% if selected_month is none %}selected{% endif %}>Todos os meses</option>
         {% for month_value, month_name in months %}
           <option value="{{ month_value }}" {% if selected_month == month_value %}selected{% endif %}>{{ month_name }}</option>
         {% endfor %}
@@ -24,6 +25,7 @@
     <div class="col-12 col-md-3">
       <label for="year" class="form-label mb-1">Ano</label>
       <select id="year" name="year" class="form-select">
+        <option value="" {% if selected_year is none %}selected{% endif %}>Todos os anos</option>
         {% for year in available_years %}
           <option value="{{ year }}" {% if selected_year == year %}selected{% endif %}>{{ year }}</option>
         {% endfor %}
@@ -104,7 +106,7 @@
   </div>
   <div class="col-6 col-xl-3">
     <div class="card kpi-card kpi-static h-100">
-      <span class="kpi-label">Horas pagas no mês</span>
+      <span class="kpi-label">Horas pagas no período</span>
       <span class="kpi-value">{{ '%.2f'|format(paid_hours_total) }} h</span>
       <span class="kpi-foot">pagamentos registrados no período</span>
     </div>
@@ -127,7 +129,7 @@
   </div>
   <div class="col-12 col-lg-8">
     <div class="card chart-card h-100">
-      <h2 class="chart-title">Atividade diária em {{ month_label }}/{{ selected_year }}</h2>
+      <h2 class="chart-title">{{ activity_chart_title }}</h2>
       <div class="chart-box chart-box-tall"><canvas id="chart-daily"></canvas></div>
     </div>
   </div>
@@ -197,15 +199,27 @@
     activities: {{ activities_data|tojson }},
     trend: {{ trend_data|tojson }},
     statusMeta: {{ status_meta|tojson }},
-    daysInMonth: {{ days_in_month }},
+    buckets: {{ buckets|tojson }},
+    bucketMode: {{ bucket_mode|tojson }},
+    periodFoot: {{ period_foot|tojson }},
     ticketDetailUrl: {{ url_for('ticket_detail', ticket_id=0)|tojson }},
     analyticsUrl: {{ url_for('analytics_dashboard')|tojson }},
   };
 
   const STATUS_ORDER = ["aberto", "em_andamento", "resolvido", "fechado"];
   const PALETTE = ["#0c4e9a", "#ffcc00", "#1f9d55", "#d92120", "#7c3aed", "#0ea5e9", "#f97316", "#14b8a6", "#64748b", "#a855f7", "#84cc16", "#e11d48"];
-  const filters = { status: null, module: null, tech: null, client: null, day: null };
-  const FILTER_LABELS = { status: "Status", module: "Módulo", tech: "Técnico", client: "Cliente", day: "Dia" };
+  const filters = { status: null, module: null, tech: null, client: null, bucket: null };
+  const FILTER_LABELS = {
+    status: "Status",
+    module: "Módulo",
+    tech: "Técnico",
+    client: "Cliente",
+    bucket: HD.bucketMode === "day" ? "Dia" : "Mês",
+  };
+  const bucketLabelOf = (key) => {
+    const bucket = HD.buckets.find((b) => b.key === key);
+    return bucket ? bucket.label : String(key);
+  };
 
   const fmt = (value, digits) =>
     Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: digits ?? 0, maximumFractionDigits: digits ?? 2 });
@@ -225,7 +239,7 @@
     if (skipDim !== "module" && filters.module && ticket.module !== filters.module) return false;
     if (skipDim !== "tech" && filters.tech && !ticket.techs.includes(filters.tech)) return false;
     if (skipDim !== "client" && filters.client && ticket.client !== filters.client) return false;
-    if (skipDim !== "day" && filters.day && ticket.day !== filters.day) return false;
+    if (skipDim !== "bucket" && filters.bucket && ticket.bucket !== filters.bucket) return false;
     return true;
   }
 
@@ -234,7 +248,7 @@
     if (skipDim !== "module" && filters.module && activity.module !== filters.module) return false;
     if (skipDim !== "tech" && filters.tech && activity.tech !== filters.tech) return false;
     if (skipDim !== "client" && filters.client && activity.client !== filters.client) return false;
-    if (skipDim !== "day" && filters.day && activity.day !== filters.day) return false;
+    if (skipDim !== "bucket" && filters.bucket && activity.bucket !== filters.bucket) return false;
     return true;
   }
 
@@ -268,7 +282,8 @@
   const moduleCats = [...countBy(HD.tickets, "module").entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
   const techCats = [...sumHoursBy(HD.activities, "tech").entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
   const clientCats = [...countBy(HD.tickets, "client").entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map((e) => e[0]);
-  const dayLabels = Array.from({ length: HD.daysInMonth }, (_, i) => i + 1);
+  const bucketKeys = HD.buckets.map((b) => b.key);
+  const bucketLabels = HD.buckets.map((b) => b.label);
 
   Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
   Chart.defaults.color = "#475467";
@@ -303,7 +318,7 @@
 
   const dailyChart = new Chart(document.getElementById("chart-daily"), {
     data: {
-      labels: dayLabels,
+      labels: bucketLabels,
       datasets: [
         {
           type: "bar",
@@ -329,7 +344,7 @@
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      onClick: clickHandler("day", dayLabels),
+      onClick: clickHandler("bucket", bucketKeys),
       onHover: hoverCursor,
       interaction: { mode: "index", intersect: false },
       scales: {
@@ -437,7 +452,7 @@
     const ages = tickets.map((t) => t.age_days).filter((v) => v != null);
 
     document.getElementById("kpi-total").textContent = tickets.length;
-    document.getElementById("kpi-total-foot").textContent = "abertos em " + "{{ month_label }}".toLowerCase();
+    document.getElementById("kpi-total-foot").textContent = HD.periodFoot;
     document.getElementById("kpi-done-rate").textContent = tickets.length ? Math.round((done / tickets.length) * 100) + "%" : "-";
     document.getElementById("kpi-done-foot").textContent = done + " concluído" + (done === 1 ? "" : "s");
     document.getElementById("kpi-pending").textContent = pending;
@@ -463,12 +478,12 @@
     );
     statusChart.update();
 
-    const dayTickets = countBy(filteredTickets("day"), "day");
-    const dayHours = sumHoursBy(filteredActivities("day"), "day");
-    dailyChart.data.datasets[0].data = dayLabels.map((d) => dayTickets.get(d) || 0);
-    dailyChart.data.datasets[1].data = dayLabels.map((d) => Math.round((dayHours.get(d) || 0) * 100) / 100);
-    dailyChart.data.datasets[0].backgroundColor = dayLabels.map((d) =>
-      filters.day && d !== filters.day ? "#0c4e9a33" : "#0c4e9a"
+    const bucketTickets = countBy(filteredTickets("bucket"), "bucket");
+    const bucketHours = sumHoursBy(filteredActivities("bucket"), "bucket");
+    dailyChart.data.datasets[0].data = bucketKeys.map((k) => bucketTickets.get(k) || 0);
+    dailyChart.data.datasets[1].data = bucketKeys.map((k) => Math.round((bucketHours.get(k) || 0) * 100) / 100);
+    dailyChart.data.datasets[0].backgroundColor = bucketKeys.map((k) =>
+      filters.bucket && k !== filters.bucket ? "#0c4e9a33" : "#0c4e9a"
     );
     dailyChart.update();
 
@@ -514,7 +529,10 @@
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "filter-chip";
-      const label = dim === "status" ? HD.statusMeta[value].label : dim === "day" ? "dia " + value : value;
+      const label =
+        dim === "status" ? HD.statusMeta[value].label :
+        dim === "bucket" ? (HD.bucketMode === "day" ? "dia " + value : bucketLabelOf(value)) :
+        value;
       chip.innerHTML = "<strong>" + FILTER_LABELS[dim] + ":</strong> " + esc(label) + " <span aria-hidden='true'>&times;</span>";
       chip.addEventListener("click", () => toggleFilter(dim, value));
       container.appendChild(chip);
@@ -565,9 +583,12 @@
           Math.round((topModule[1] / tickets.length) * 100) + "%</strong> dos chamados do período."
         );
       }
-      const dayCounts = [...countBy(tickets, "day").entries()].sort((a, b) => b[1] - a[1])[0];
-      if (dayCounts && dayCounts[1] > 1) {
-        insights.push("📅 O dia <strong>" + dayCounts[0] + "</strong> foi o de maior abertura, com <strong>" + dayCounts[1] + "</strong> chamados.");
+      const topBucket = [...countBy(tickets, "bucket").entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topBucket && topBucket[1] > 1) {
+        const phrase = HD.bucketMode === "day"
+          ? "📅 O dia <strong>" + esc(topBucket[0]) + "</strong> foi o de maior abertura, com <strong>" + topBucket[1] + "</strong> chamados."
+          : "📅 <strong>" + esc(bucketLabelOf(topBucket[0])) + "</strong> foi o mês com mais aberturas: <strong>" + topBucket[1] + "</strong> chamados.";
+        insights.push(phrase);
       }
     }
     if (totalHours > 0) {

@@ -1318,7 +1318,7 @@ def analytics_dashboard():
         def bucket_of(moment: datetime):
             return moment.day
 
-        period_label = f"{month_names[selected_month]} de {selected_year}"
+        period_label = f"Visão de {month_names[selected_month]} de {selected_year}"
         activity_chart_title = f"Atividade diária em {month_names[selected_month]}/{selected_year}"
         period_foot = f"abertos em {month_names[selected_month].lower()}"
     else:
@@ -1336,11 +1336,11 @@ def analytics_dashboard():
             return f"{moment.year}-{moment.month:02d}"
 
         if selected_year is not None:
-            period_label = f"ano de {selected_year}"
+            period_label = f"Visão do ano de {selected_year}"
             activity_chart_title = f"Atividade mensal em {selected_year}"
             period_foot = f"abertos em {selected_year}"
         else:
-            period_label = "todo o período"
+            period_label = "Visão de todo o período"
             activity_chart_title = "Atividade mensal — todo o período"
             period_foot = "no período completo"
 
@@ -1424,7 +1424,8 @@ def analytics_dashboard():
         )
 
     # Tendência dos últimos 12 meses encerrando no período selecionado.
-    trend_start = add_months(period_start, -11)
+    trend_anchor_source = period_end - timedelta(seconds=1)
+    trend_start = add_months(datetime(trend_anchor_source.year, trend_anchor_source.month, 1), -11)
     trend_counts: dict[tuple[int, int], int] = defaultdict(int)
     trend_ticket_rows = ticket_scope.filter(
         Ticket.created_at >= trend_start, Ticket.created_at < period_end
@@ -1473,7 +1474,14 @@ def analytics_dashboard():
         role=role,
         reference=today,
     )
-    paid_hours_period_total = calculate_paid_hours_for_month(selected_year, selected_month)
+    if selected_year is None:
+        paid_scope = PaymentRecord.query
+    else:
+        paid_scope = PaymentRecord.query.filter(
+            PaymentRecord.paid_at >= period_start.date(),
+            PaymentRecord.paid_at < period_end.date(),
+        )
+    paid_hours_period_total = round(sum(payment.paid_hours for payment in paid_scope.all()), 2)
 
     return render_template(
         "analytics.html",
@@ -1482,8 +1490,11 @@ def analytics_dashboard():
         selected_month=selected_month,
         selected_year=selected_year,
         available_years=available_years,
-        month_label=dict(MONTHS_PT).get(selected_month, str(selected_month)),
-        days_in_month=calendar.monthrange(selected_year, selected_month)[1],
+        period_label=period_label,
+        activity_chart_title=activity_chart_title,
+        period_foot=period_foot,
+        buckets=buckets,
+        bucket_mode=bucket_mode,
         tickets_data=tickets_data,
         activities_data=activities_data,
         trend_data=trend_data,
