@@ -285,8 +285,45 @@
   const bucketKeys = HD.buckets.map((b) => b.key);
   const bucketLabels = HD.buckets.map((b) => b.label);
 
+  const chartTheme = () => {
+    const styles = getComputedStyle(document.documentElement);
+    return {
+      text: styles.getPropertyValue("--app-text-muted").trim() || "#475467",
+      grid: styles.getPropertyValue("--app-border").trim() || "#d8e2f0",
+      surface: styles.getPropertyValue("--app-surface").trim() || "#ffffff",
+    };
+  };
+
+  function applyChartTheme(chart) {
+    const colors = chartTheme();
+    const options = chart.config.options || {};
+    Chart.defaults.color = colors.text;
+    options.color = colors.text;
+
+    if (options.plugins && options.plugins.legend) {
+      options.plugins.legend.labels = Object.assign({}, options.plugins.legend.labels, {
+        color: colors.text,
+      });
+    }
+
+    Object.keys(options.scales || {}).forEach((scaleId) => {
+      const scale = options.scales[scaleId];
+      scale.ticks = Object.assign({}, scale.ticks, { color: colors.text });
+      scale.grid = Object.assign({}, scale.grid, { color: colors.grid });
+      if (scale.title) {
+        scale.title = Object.assign({}, scale.title, { color: colors.text });
+      }
+    });
+
+    if (chart.canvas && chart.canvas.id === "chart-status") {
+      chart.data.datasets[0].borderColor = colors.surface;
+    }
+
+    chart.update("none");
+  }
+
   Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
-  Chart.defaults.color = "#475467";
+  Chart.defaults.color = chartTheme().text;
   Chart.defaults.plugins.legend.labels.boxWidth = 12;
 
   function clickHandler(dim, categories) {
@@ -304,7 +341,7 @@
     type: "doughnut",
     data: {
       labels: STATUS_ORDER.map((s) => HD.statusMeta[s].label),
-      datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: "#ffffff" }],
+      datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: chartTheme().surface }],
     },
     options: {
       responsive: true,
@@ -401,7 +438,7 @@
       })
     : null;
 
-  new Chart(document.getElementById("chart-trend"), {
+  const trendChart = new Chart(document.getElementById("chart-trend"), {
     data: {
       labels: HD.trend.map((row) => row.label),
       datasets: [
@@ -615,6 +652,16 @@
   document.getElementById("clear-filters").addEventListener("click", () => {
     Object.keys(filters).forEach((dim) => (filters[dim] = null));
     updateAll();
+  });
+
+  [statusChart, dailyChart, modulesChart, techsChart, clientsChart, trendChart]
+    .filter(Boolean)
+    .forEach(applyChartTheme);
+
+  window.addEventListener("hopeDeskThemeChange", () => {
+    [statusChart, dailyChart, modulesChart, techsChart, clientsChart, trendChart]
+      .filter(Boolean)
+      .forEach(applyChartTheme);
   });
 
   updateInsights();
