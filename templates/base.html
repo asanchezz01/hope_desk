@@ -39,13 +39,16 @@
         <a href="{{ url_for('dashboard') }}" class="app-nav-link {{ 'active' if request.endpoint == 'dashboard' }}">Chamados</a>
       </div>
       <div class="d-flex app-navbar-user align-items-center gap-2 gap-sm-3">
-        <div class="theme-switcher" role="group" aria-label="Tema da interface">
-          <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
-            Claro
-          </button>
-          <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
-            Escuro
-          </button>
+        <div class="theme-control" aria-label="Tema da interface">
+          <span class="theme-switcher-label">Tema</span>
+          <div class="theme-switcher" role="group">
+            <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
+              Claro
+            </button>
+            <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
+              Escuro
+            </button>
+          </div>
         </div>
         <details class="user-info-menu">
           <summary
@@ -72,6 +75,17 @@
           <div class="top-actions-panel">
             <a href="{{ url_for('analytics_dashboard') }}" class="top-actions-link d-md-none">Painel de Indicadores</a>
             <a href="{{ url_for('dashboard') }}" class="top-actions-link d-md-none">Chamados</a>
+            <div class="top-actions-theme">
+              <span class="top-actions-theme-label">Tema da interface</span>
+              <div class="theme-switcher theme-switcher-menu" role="group" aria-label="Tema da interface">
+                <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
+                  Claro
+                </button>
+                <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
+                  Escuro
+                </button>
+              </div>
+            </div>
             <a href="{{ url_for('activities_report') }}" class="top-actions-link">Relatório de Atividades</a>
             {% if session.get('is_superuser') %}
               <a href="{{ url_for('manage_company_parameters') }}" class="top-actions-link">Parâmetros da Empresa</a>
@@ -88,13 +102,16 @@
       </div>
     {% else %}
       <div class="ms-auto">
-        <div class="theme-switcher" role="group" aria-label="Tema da interface">
-          <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
-            Claro
-          </button>
-          <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
-            Escuro
-          </button>
+        <div class="theme-control" aria-label="Tema da interface">
+          <span class="theme-switcher-label">Tema</span>
+          <div class="theme-switcher" role="group">
+            <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
+              Claro
+            </button>
+            <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
+              Escuro
+            </button>
+          </div>
         </div>
       </div>
     {% endif %}
