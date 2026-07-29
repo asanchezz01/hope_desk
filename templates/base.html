@@ -38,20 +38,8 @@
         <a href="{{ url_for('analytics_dashboard') }}" class="app-nav-link {{ 'active' if request.endpoint == 'analytics_dashboard' }}">Painel</a>
         <a href="{{ url_for('dashboard') }}" class="app-nav-link {{ 'active' if request.endpoint == 'dashboard' }}">Chamados</a>
       </div>
-      <div class="d-flex app-navbar-user align-items-center gap-2 gap-sm-3">
-        <div class="theme-control" aria-label="Tema da interface">
-          <span class="theme-switcher-label">Tema</span>
-          <div class="theme-switcher" role="group">
-            <button type="button" class="theme-switcher-button" data-theme-choice="light" aria-pressed="true">
-              Claro
-            </button>
-            <button type="button" class="theme-switcher-button" data-theme-choice="dark" aria-pressed="false">
-              Escuro
-            </button>
-          </div>
-        </div>
-        <details class="user-info-menu">
-          <summary
+      <div class="d-flex app-navbar-user align-items-center gap-sm-3">
+        <details class="user-info-menu">          <summary
             class="app-user-avatar"
             title="{{ session.get('user_name') }} ({{ 'Cliente' if session.get('role') == 'client' else 'Técnico' }})"
             aria-label="Usuário logado: {{ session.get('user_name') }}"
