@@ -1,0 +1,10 @@
+import { statusLabel } from '../common/domain/legacy-enums';
+import { ActivityCreatedEvent, PasswordResetRequestedEvent, TicketCreatedEvent, TicketStatusChangedEvent } from '../common/events/domain-events';
+import { OutgoingEmail } from './mailer.service';
+export declare function buildTicketUrl(appPublicUrl: string, ticketId: number): string;
+export declare function buildResetPasswordUrl(appPublicUrl: string, token: string): string;
+export declare function newTicketEmail(event: TicketCreatedEvent, recipients: string[], ticketUrl: string): OutgoingEmail;
+export declare function statusChangedEmail(event: TicketStatusChangedEvent, ticketUrl: string): OutgoingEmail;
+export declare function newActivityEmail(event: ActivityCreatedEvent, ticketUrl: string): OutgoingEmail;
+export declare function passwordResetEmail(event: PasswordResetRequestedEvent, resetUrl: string, maxAgeHours: number): OutgoingEmail;
+export { statusLabel };
