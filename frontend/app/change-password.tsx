@@ -1,51 +1,137 @@
-import React from 'react'
+import { useRouter } from 'expo-router'
+import React, { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { api } from '../src/api/client'
+import { toMessage } from '../src/api/to-message'
 import Button from '../src/components/Button'
-import Card from '../src/components/Card'
+import Input from '../src/components/Input'
+import { useToast } from '../src/components/Toast'
 import { useAuth } from '../src/context/AuthProvider'
+import AuthLayout from '../src/layout/AuthLayout'
 import { useTheme } from '../src/theme/ThemeContext'
 
+const PASSWORD_MIN_LENGTH = 6
+
 /**
- * Destino obrigatório enquanto a API sinaliza `mustChangePassword`. É a única
- * rota autenticada que o gate deixa passar nesse estado — por isso ela existe
- * já na Fase 08, mesmo com o formulário só chegando na Fase 09.
+ * Única rota autenticada liberada enquanto `mustChangePassword` estiver ativo —
+ * a API responde 403 em todo o resto.
  */
 export default function ChangePassword() {
   const theme = useTheme()
-  const insets = useSafeAreaInsets()
+  const router = useRouter()
+  const toast = useToast()
   const { signOut, mustChangePassword } = useAuth()
 
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit() {
+    if (submitting) return
+
+    if (!currentPassword) {
+      setError('Informe a senha atual.')
+      return
+    }
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`A nova senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+      return
+    }
+    if (password === currentPassword) {
+      setError('A nova senha deve ser diferente da atual.')
+      return
+    }
+    if (password !== confirmation) {
+      setError('As senhas não conferem.')
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      await api.changePassword({ currentPassword, password, confirmation })
+
+      // `revokeAllForUser` derruba TODOS os refresh tokens, inclusive o desta
+      // sessão. Continuar na aplicação daria a impressão de que tudo segue
+      // normal até o próximo refresh falhar — melhor encerrar aqui.
+      toast.show('Senha alterada. Entre novamente com a nova senha.', 'success')
+      await signOut()
+      router.replace('/login')
+    } catch (caught) {
+      setError(toMessage(caught))
+      setSubmitting(false)
+    }
+  }
+
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top + 24 }]}
+    <AuthLayout
+      title={mustChangePassword ? 'Defina uma nova senha' : 'Trocar senha'}
+      subtitle={
+        mustChangePassword
+          ? 'Sua conta exige a troca da senha antes de acessar o sistema.'
+          : 'Ao confirmar, todas as sessões abertas serão encerradas.'
+      }
     >
-      <Card style={styles.card}>
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>
-          {mustChangePassword ? 'Defina uma nova senha' : 'Trocar senha'}
+      <Input
+        label="Senha atual"
+        value={currentPassword}
+        onChangeText={setCurrentPassword}
+        secureTextEntry
+        autoCapitalize="none"
+        autoComplete="current-password"
+        textContentType="password"
+        disabled={submitting}
+      />
+
+      <Input
+        label="Nova senha"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        autoCapitalize="none"
+        autoComplete="new-password"
+        textContentType="newPassword"
+        hint={`Mínimo de ${PASSWORD_MIN_LENGTH} caracteres.`}
+        disabled={submitting}
+      />
+
+      <Input
+        label="Confirme a nova senha"
+        value={confirmation}
+        onChangeText={setConfirmation}
+        secureTextEntry
+        autoCapitalize="none"
+        autoComplete="new-password"
+        textContentType="newPassword"
+        returnKeyType="go"
+        onSubmitEditing={() => void handleSubmit()}
+        disabled={submitting}
+      />
+
+      {error && (
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+          {error}
         </Text>
-        <Text style={[styles.body, { color: theme.textSecondary }]}>
-          {mustChangePassword
-            ? 'Sua conta exige a troca da senha antes de acessar o sistema.'
-            : 'Você pode alterar sua senha a qualquer momento.'}
-        </Text>
-        <Text style={[styles.note, { color: theme.muted }]}>
-          O formulário será entregue na Fase 09 da migração.
-        </Text>
-        <View style={styles.actions}>
-          <Button title="Sair" variant="outline" onPress={() => void signOut()} />
-        </View>
-      </Card>
-    </View>
+      )}
+
+      <Button title="Alterar senha" onPress={() => void handleSubmit()} loading={submitting} full />
+
+      <View style={styles.secondary}>
+        <Button
+          title="Sair"
+          variant="secondary"
+          onPress={() => void signOut()}
+          disabled={submitting}
+        />
+      </View>
+    </AuthLayout>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', padding: 24 },
-  card: { width: '100%', maxWidth: 420 },
-  title: { fontSize: 20, fontWeight: '700' },
-  body: { marginTop: 6, lineHeight: 20 },
-  note: { marginTop: 10, fontSize: 12 },
-  actions: { marginTop: 16, flexDirection: 'row', justifyContent: 'flex-end' },
+  error: { marginBottom: 12, fontSize: 13, fontWeight: '600' },
+  secondary: { marginTop: 12, alignItems: 'center' },
 })

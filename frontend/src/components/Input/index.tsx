@@ -20,6 +20,11 @@ interface InputProps {
   disabled?: boolean
   onSubmitEditing?: () => void
   returnKeyType?: TextInputProps['returnKeyType']
+  /** Campo de texto longo (descrição de chamado, notas de atividade). */
+  multiline?: boolean
+  /** Altura inicial em linhas; só tem efeito com `multiline`. */
+  rows?: number
+  maxLength?: number
 }
 
 export default function Input({
@@ -37,6 +42,9 @@ export default function Input({
   disabled = false,
   onSubmitEditing,
   returnKeyType,
+  multiline = false,
+  rows = 5,
+  maxLength,
 }: InputProps) {
   const theme = useTheme()
   const describedBy = useId()
@@ -65,8 +73,11 @@ export default function Input({
             borderColor: error ? theme.danger : theme.border,
             color: theme.textPrimary,
           },
+          multiline && { minHeight: 24 * rows, textAlignVertical: 'top' },
           disabled && styles.disabled,
         ]}
+        multiline={multiline}
+        maxLength={maxLength}
         placeholder={placeholder}
         placeholderTextColor={theme.muted}
         value={value}

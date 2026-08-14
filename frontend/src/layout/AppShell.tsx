@@ -25,9 +25,15 @@ interface AppShellProps {
   children: React.ReactNode
   title: string
   navItems?: NavItem[]
+  /**
+   * Desliga o ScrollView interno. Telas com lista própria (`FlatList`) precisam
+   * disso: uma lista virtualizada dentro de um ScrollView perde a
+   * virtualização, avisa no console e rola em dois eixos concorrentes.
+   */
+  scroll?: boolean
 }
 
-export default function AppShell({ children, title, navItems = [] }: AppShellProps) {
+export default function AppShell({ children, title, navItems = [], scroll = true }: AppShellProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const { hasSideNav, contentMaxWidth } = useBreakpoint()
@@ -78,15 +84,21 @@ export default function AppShell({ children, title, navItems = [] }: AppShellPro
           </View>
         )}
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={[
-            styles.contentInner,
-            { paddingBottom: insets.bottom + 24, maxWidth: contentMaxWidth },
-          ]}
-        >
-          {children}
-        </ScrollView>
+        {scroll ? (
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={[
+              styles.contentInner,
+              { paddingBottom: insets.bottom + 24, maxWidth: contentMaxWidth },
+            ]}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.content, styles.contentPlain, { maxWidth: contentMaxWidth }]}>
+            {children}
+          </View>
+        )}
       </View>
     </View>
   )
@@ -166,4 +178,5 @@ const styles = StyleSheet.create({
   navLabelActive: { fontWeight: '700' },
   content: { flex: 1 },
   contentInner: { padding: 16, gap: 16, width: '100%', alignSelf: 'center' },
+  contentPlain: { width: '100%', alignSelf: 'center' },
 })

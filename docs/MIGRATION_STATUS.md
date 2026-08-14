@@ -21,7 +21,7 @@ Atualizado em: 2026-08-13
 | 06 | Banco de horas | ✅ **Concluída e validada** |
 | 07 | Analytics, relatórios e notificações | ✅ **Concluída e validada** |
 | 08 | Frontend Expo e design system | ✅ **Concluída e validada** |
-| 09 | Frontend de autenticação e chamados | Pendente |
+| 09 | Frontend de autenticação e chamados | ✅ **Concluída e validada** |
 | 10 | Frontend de analytics, relatórios e administração | Pendente |
 | 11 | Recursos modernos e endurecimento | Pendente |
 | 12 | Migração de dados, operação paralela e cutover | Pendente |
@@ -887,6 +887,127 @@ apareceria aqui.
 
 ---
 
+## Fase 09 — autenticação e chamados no frontend ✅
+
+Segui a regra que a Fase 03 deixou registrada — **conferir cada contrato direto
+no código do backend, não na documentação derivada** — e ela rendeu quatro
+descobertas que teriam virado defeito.
+
+### Descoberta 1 — chamados NÃO trazem `canEdit`/`canDelete`
+
+A seção "Convenções que o frontend precisa respeitar" (item 3) diz que as
+respostas trazem dicas de UI. Isso vale para `ActivityResponse`, mas
+**`TicketResponse` não tem esses campos**. Verificado contra a API em execução.
+
+Consequência: a UI ou mostraria botões que resultam em 403, ou esconderia ações
+permitidas. A solução foi espelhar a política em
+`src/domain/ticket-permissions.ts`, inclusive **a distorção de 3 horas** de
+`can_delete_by_month` — que compara os componentes UTC de `ticket.created_at`
+com o mês local de `datetime.now()`. Corrigir no cliente faria a UI discordar da
+API exatamente nas 3 primeiras horas do dia 1º de cada mês. Há teste para o caso
+da virada.
+
+Em atividades é o oposto: as dicas **existem** e são usadas como vêm, porque a
+regra depende da autoria — nem superuser edita atividade lançada por outro
+técnico, e isso não é derivável do papel.
+
+### Descoberta 2 — o controller de `users` inteiro exige papel de técnico
+
+`@Roles('technician')` está na **classe**, não nos métodos. Logo
+`GET /users/clients` e `GET /users/technicians` devolvem **403 para cliente** —
+confirmado na API real. Um formulário que buscasse essas listas sem condição
+mostraria um erro sem motivo para todo cliente que abrisse um chamado.
+
+Os hooks usam `enabled` para nem disparar a requisição. Já
+`GET /system-modules/active` é liberado a qualquer autenticado, justamente
+porque o cliente precisa dele para abrir chamado.
+
+### Descoberta 3 — o link de redefinição usa segmento de caminho
+
+`buildResetPasswordUrl` monta `<APP_PUBLIC_URL>/reset-password/<token>`. Com o
+token no **caminho**, não em query string — por isso a rota é
+`app/reset-password/[token].tsx`. Ter assumido `?token=` deixaria todo link de
+e-mail caindo em "não encontrado".
+
+### Descoberta 4 — trocar a senha derruba a própria sessão
+
+`changePassword` chama `revokeAllForUser(user.id)`, que revoga **todos** os
+refresh tokens, incluindo o da sessão atual. O access token sobrevive até
+expirar (15 min), então a aplicação pareceria funcionar normalmente até o
+próximo refresh falhar sem explicação. A tela encerra a sessão e leva ao login,
+como a própria mensagem da API sugere.
+
+### Entregas
+
+| Arquivo | Papel |
+|---|---|
+| `src/domain/wall-clock.ts` | parse, máscara, validação e duração em hora de parede — **puras**, sem `Date` no caminho de ida |
+| `src/domain/ticket-permissions.ts` | espelho da política de chamados, com a distorção do legado preservada |
+| `src/domain/months.ts` | meses pt-BR, espelhando `MONTHS_PT` |
+| `src/api/tickets.ts`, `activities.ts`, `catalog.ts` | superfície tipada dos domínios |
+| `src/hooks/useTickets.ts`, `useActivities.ts`, `useCatalog.ts` | consultas e mutações com invalidação |
+| `src/hooks/useDebouncedValue.ts` | evita uma requisição por tecla na busca |
+| `src/components/Select` | seletor em modal, acessível e igual nas três plataformas |
+| `src/components/DateTimeField` | entrada de hora de parede em pt-BR |
+| `src/components/ActivityForm`, `TicketCard`, `ErrorState` | peças das telas |
+| `src/layout/AuthLayout.tsx` | moldura das telas públicas, com `KeyboardAvoidingView` |
+| `app/login`, `forgot-password`, `reset-password/[token]`, `change-password` | autenticação |
+| `app/index` | listagem com filtros de ano, mês, situação, busca e paginação |
+| `app/tickets/new`, `[id]/index`, `[id]/edit` | criação, detalhe com atividades, edição |
+
+### Decisões
+
+- **Hora de parede nunca vira `Date`.** `DateTimeField` exibe `dd/mm/aaaa HH:MM`
+  e devolve `YYYY-MM-DDTHH:mm` por manipulação de string. Um seletor nativo foi
+  descartado de propósito: além de divergir entre plataformas, todos trabalham
+  com `Date` — o tipo que não pode tocar nesse valor. Testes cobrem as bordas do
+  dia, onde uma conversão de fuso mudaria também a data.
+- **`createdAt` é o oposto**: instante UTC de verdade, exibido no fuso do
+  aparelho. Há teste explicitando que as duas funções não são intercambiáveis.
+- **Módulo inativo continua editável.** A criação exige módulo ativo; a edição
+  não (assimetria do legado, para não travar chamados antigos). Como
+  `/system-modules/active` só devolve ativos, a tela de edição acrescenta o
+  módulo atual do chamado à lista, marcado como inativo.
+- **404 tratado como "não encontrado", sem sugerir que existe** — a UI segue a
+  mesma escolha da API.
+- **Prevenção de duplo envio** em todos os formulários (guarda no início do
+  handler, não só `disabled`, porque no Web o Enter dispara junto com o clique).
+- **`ConfirmationDialog` com `busy`** em toda exclusão.
+- **Conflito de horário fica com o servidor.** A validação local cobre formato e
+  ordem; sobreposição depende das outras atividades do técnico, que o cliente
+  não conhece. Confirmado: adjacência não conflita (409 só na sobreposição).
+
+### Correções de infraestrutura
+
+- **`.eslintignore`**: `eslint .` varria o `dist/` do build Web e passava de
+  **dez minutos**. Com a saída de build ignorada, roda em segundos.
+- Anotações de tipo em `data ?? []`: a união `T[] | never[]` impede o TypeScript
+  de resolver a assinatura de `.map`, e o parâmetro caía em `any` implícito com
+  `strict` ligado.
+
+### Validações executadas
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | ✅ sem erros |
+| `npm run lint:check` (`--max-warnings 0`) | ✅ sem erros nem avisos |
+| `npm test` | ✅ **95 testes** em 8 suítes (+35 nesta fase) |
+| `npm run build:web` | ✅ **11 rotas** estáticas renderizadas |
+| Verificação de contrato contra a API em execução | ✅ **24 checagens**, todas conferindo |
+
+A verificação de contrato subiu a API de verdade, com banco semeado, e exercitou
+cada suposição do frontend: permissões dos catálogos, `clientId` ignorado na
+criação por cliente, paginação, busca por ID, hora de parede na ida e na volta,
+conflito e adjacência de atividades, 404 simétrico entre cliente e superuser, e
+recusa de troca de status por cliente.
+
+Dois defeitos do próprio script apareceram e valem registro, porque descrevem o
+sistema: o conflito de atividade é **global por técnico e atravessa chamados**
+(rodar duas vezes com os mesmos horários colide), e o seed tem **um único
+cliente** — testar isolamento exige criar um segundo.
+
+---
+
 ## Como rodar
 
 ```bash
@@ -956,6 +1077,9 @@ rede local.
 | 18 | **Todo o trabalho das Fases 00–08 está apenas na árvore de trabalho, não commitado.** O commit `5bec22a4a` versionou `node_modules` e `dist`, mas nenhum fonte; o que existia estava só num stash | 🔴 Alto | Recuperado em 2026-08-13. **Commitar é decisão do usuário e ainda não foi feito** — até lá o repositório continua sem os fontes |
 | 19 | ~~`start:prod` e `CMD` do Dockerfile apontavam para `dist/main`, mas o build emitia `dist/src/main.js`: a imagem de produção não subia~~ | — | ✅ Resolvido na Fase 08 (`rootDir: "src"` em `tsconfig.build.json`) |
 | 20 | O gate de navegação esconde rotas por perfil (`visible` no `AppShell`). Isso é conveniência, **não** autorização | Informativo | A API recusa por conta própria; nenhuma tela deve assumir o contrário |
+| 21 | `TicketResponse` não expõe `canEdit`/`canDelete` (só `ActivityResponse` expõe). O frontend espelha a política em `ticket-permissions.ts` — se a regra do servidor mudar, o espelho precisa mudar junto | Médio | Coberto por teste no cliente; a API continua sendo a palavra final |
+| 22 | `canDeleteTicket` no cliente usa `Intl` com `America/Sao_Paulo`. Runtime sem dados de fuso cai no relógio local e pode divergir da API em aparelho fora do fuso | Baixo | Degradação documentada em `ticket-permissions.ts`; só afeta a exibição do botão |
+| 23 | A verificação de contrato (`contract-check.mjs`) roda contra a API local, mas vive no scratchpad e não está versionada | Baixo | Promover a teste e2e do frontend se a checagem passar a ser recorrente |
 
 ---
 
@@ -973,8 +1097,31 @@ Ao concluir cada fase:
 
 ## Próxima fase
 
-**Fase 09 — telas de autenticação e chamados.** A fundação do frontend está de
-pé; agora entram os fluxos.
+**Fase 10 — analytics, relatórios e administração.**
+
+### O que já existe e deve ser reaproveitado
+
+| Peça | Onde |
+|---|---|
+| cores canônicas para os gráficos | `LEGACY_PALETTE` / `colors.palette` — **não** use as variantes ajustadas por tema |
+| rótulos e cores de status | `src/domain/ticket-status.ts`, idêntico a `ANALYTICS_STATUS_META` |
+| meses em pt-BR | `src/domain/months.ts` |
+| seletor de filtros | `src/components/Select` |
+| estados de carregamento, erro e vazio | `Skeleton`, `ErrorState`, `EmptyState` |
+| restrição por perfil nos hooks | padrão `enabled` de `useCatalog.ts` |
+
+Pontos de atenção que a Fase 10 vai encontrar:
+
+1. **Valores monetários chegam como `{ value, formatted }`.** `value` para
+   cálculo, `formatted` para exibir — nunca reparse o `formatted`.
+2. **As áreas administrativas são superuser-only**, não technician: parâmetros,
+   módulos e pagamentos usam `@RequiresSuperuser()`. Gestão de usuários é a
+   exceção, com `@Roles('technician')`.
+3. **O KPI de primeira resposta mistura hora de parede com instante UTC** e sai
+   3h menor que o real (item 14 dos riscos). É preservado por paridade — a
+   Fase 10 exibe o número como a API devolve, sem "consertar" na tela.
+4. **PDF**: os relatórios têm versão JSON e PDF. O download precisa de
+   `expo-file-system`/`expo-sharing` no nativo e de `Blob` no Web.
 
 ### O que a Fase 08 deixou pronto para as telas usarem
 
@@ -989,10 +1136,8 @@ pé; agora entram os fluxos.
 | carregamento, vazio e confirmação | `Skeleton`, `EmptyState`, `ConfirmationDialog` (com `busy` contra duplo envio) |
 | rótulos e cores de status | `src/domain/ticket-status.ts` |
 
-As rotas `/login`, `/change-password` existem como destino do gate, mas com
-conteúdo provisório: os formulários são da Fase 09. `/forgot-password` e
-`/reset-password` já constam como públicas no gate, mas os arquivos ainda não
-existem em `app/` — criar junto com os formulários.
+Todas essas rotas foram concluídas na Fase 09, incluindo `/forgot-password` e
+`/reset-password/[token]`.
 
 ### O que já está pronto para consumir
 

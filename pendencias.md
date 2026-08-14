@@ -20,19 +20,28 @@ Todos os itens que estavam abertos foram fechados:
 7. ✅ **Testes de componente** — 60 testes em 6 suítes, saída limpa.
 8. ✅ **Lint** — `eslint . --max-warnings 0` sem erros nem avisos.
 
-## Fase 09 — próxima
+## Fase 09 — Autenticação e chamados — ✅ concluída em 2026-08-14
 
-Telas de autenticação e chamados. Ver "Próxima fase" em
-`docs/MIGRATION_STATUS.md` para o que a fundação já entrega pronto.
+Login, esqueci/redefino senha (deep link `/reset-password/<token>`), troca
+obrigatória, listagem com filtros e busca, criação, detalhe, edição, mudança de
+status, atribuição de técnico e atividades com validação de horário.
 
-## Fases 10, 11 e 12
+95 testes, 11 rotas no build Web e 24 checagens de contrato contra a API real.
 
-- 10 — analytics, relatórios e telas administrativas;
+## Fase 10 — próxima
+
+Analytics, relatórios (JSON e PDF) e telas administrativas. Ver "Próxima fase"
+em `docs/MIGRATION_STATUS.md` para os pontos de atenção já mapeados.
+
+## Fases 11 e 12
+
 - 11 — endurecimento (rate limiting, headers, correlation ID, auditoria);
 - 12 — migração de dados, operação paralela e cutover.
 
 ## Pendência fora das fases
 
-🔴 **Nada das Fases 00–08 está commitado.** O commit `5bec22a4a` versionou
-`node_modules` e `dist`, mas nenhum fonte — o código estava só num stash, de
-onde foi recuperado. Ver o item 18 da tabela de riscos.
+🔴 **Rotação de credenciais de produção.** O `backend/.env.example` já conteve a
+senha real do PostgreSQL e a conta SMTP. O arquivo foi limpo e os valores foram
+removidos do `MIGRATION_STATUS.md` antes do primeiro commit que versiona
+`docs/`, mas a rotação em si continua pendente — é ação do usuário. Ver a seção
+"Ação pendente do usuário (segurança)" em `docs/MIGRATION_STATUS.md`.
