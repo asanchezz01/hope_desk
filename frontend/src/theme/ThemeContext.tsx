@@ -44,6 +44,16 @@ export interface ThemeColors {
   /** Cor de texto sobre `primary`/`danger`/`success` preenchidos. */
   onAccentText: string
   text: string
+  /**
+   * Hue única das barras de MAGNITUDE (por módulo, técnico, cliente, tendência).
+   * Separada de `primary` de propósito: `primary` é escolhida por contraste de
+   * TEXTO (WCAG AA), e a marca de gráfico é escolhida por contraste contra a
+   * superfície do gráfico. Ambos os valores passam em todas as checagens do
+   * validador de paleta no seu modo — ver a nota em `chart-palette.ts`.
+   */
+  chartMagnitude: string
+  /** Trilho de fundo das barras, um passo acima da superfície. */
+  chartTrack: string
 }
 
 /** Paleta do legado. Identidade da marca — não varia com o tema. */
@@ -72,6 +82,8 @@ export const lightTheme: ThemeColors = {
   success: '#157f42',
   onAccentText: '#ffffff',
   text: '#1f2937',
+  chartMagnitude: '#0c4e9a',
+  chartTrack: '#eef1f5',
 }
 
 export const darkTheme: ThemeColors = {
@@ -90,6 +102,8 @@ export const darkTheme: ThemeColors = {
   // No escuro os preenchimentos são claros, então o texto sobre eles é escuro.
   onAccentText: '#111827',
   text: '#f3f4f6',
+  chartMagnitude: '#4f93d9',
+  chartTrack: '#273244',
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system'

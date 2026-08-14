@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ApiError } from '../api/client'
 import {
@@ -23,7 +23,7 @@ export function useTicketList(params: ListTicketsParams) {
     queryFn: () => ticketsApi.list(params),
     // Manter a página anterior visível durante a troca de filtro evita o
     // "pisca-branco" a cada tecla digitada na busca.
-    placeholderData: (previous) => previous,
+    placeholderData: keepPreviousData,
   })
 }
 

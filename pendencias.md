@@ -28,15 +28,31 @@ status, atribuição de técnico e atividades com validação de horário.
 
 95 testes, 11 rotas no build Web e 24 checagens de contrato contra a API real.
 
-## Fase 10 — próxima
+## Fase 10 — Analytics, relatórios e administração — ✅ concluída em 2026-08-14
 
-Analytics, relatórios (JSON e PDF) e telas administrativas. Ver "Próxima fase"
-em `docs/MIGRATION_STATUS.md` para os pontos de atenção já mapeados.
+Painel com KPIs, situação, fila, tendências de 12 meses e agregações; relatórios
+de atividades e demonstrativo mensal, em tela e em PDF; usuários, módulos,
+parâmetros da empresa e pagamentos.
 
-## Fases 11 e 12
+123 testes, 18 rotas no build Web e 30 checagens de contrato contra a API real.
 
-- 11 — endurecimento (rate limiting, headers, correlation ID, auditoria);
-- 12 — migração de dados, operação paralela e cutover.
+Dois achados que valem leitura no `docs/MIGRATION_STATUS.md`:
+
+- 🔴 **A camada de consultas estava sem tipagem** desde a Fase 08 — TypeScript
+  5.3 não resolve `NoInfer` do TanStack Query v5, e todo `useQuery(...).data`
+  era `any` sem emitir erro. Corrigido com TypeScript 5.6.
+- 🔴 **`"1.500"` em campo de dinheiro vira R$ 1,50.** Comportamento herdado do
+  `float()` do legado, preservado por paridade e bloqueado na borda de entrada
+  do frontend.
+
+## Fase 11 — próxima
+
+Endurecimento: rate limiting, headers de segurança, correlation ID e auditoria.
+Ver "Próxima fase" em `docs/MIGRATION_STATUS.md`.
+
+## Fase 12
+
+Migração de dados, operação paralela e cutover.
 
 ## Pendência fora das fases
 

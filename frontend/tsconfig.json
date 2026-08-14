@@ -4,19 +4,19 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     },
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "jsx": "react-native",
-    "moduleResolution": "node",
+    // `moduleResolution: "node"` (Node10) NÃO resolve os tipos de pacotes que
+    // publicam via campo `exports`, como o @tanstack/react-query v5: o import
+    // funciona, mas `useQuery(...).data` vira `any` em silêncio — a camada
+    // inteira de consultas fica sem checagem, e nenhum erro é emitido para
+    // avisar. "bundler" é o modo correto aqui, porque o Metro é um bundler.
+    "moduleResolution": "bundler",
+    "module": "esnext",
     "target": "ES2022"
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/**/*.ts"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/**/*.ts"]
 }

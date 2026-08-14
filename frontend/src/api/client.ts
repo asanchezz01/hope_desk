@@ -238,6 +238,77 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 }
 
+/**
+ * Baixa uma resposta binária (os relatórios em PDF) já autenticada.
+ *
+ * Não dá para usar um `<a href>` nem `Linking.openURL` para esses endpoints: a
+ * API exige `Authorization`, e a URL não carrega o token — abrir o link
+ * resultaria em 401. Por isso o arquivo vem por `fetch` e só depois é entregue
+ * ao sistema.
+ *
+ * O refresh aqui é deliberadamente mais simples que em `request`: um 401 tenta
+ * uma renovação e repete uma vez.
+ */
+export async function requestBlob(
+  path: string,
+  options: RequestOptions = {}
+): Promise<{ blob: Blob; filename: string | null }> {
+  const { body, rawBody, anonymous = false, ...init } = options
+  const payload: BodyInit | undefined =
+    rawBody ?? (body === undefined ? undefined : JSON.stringify(body))
+
+  async function attempt(session: StoredSession | null): Promise<Response> {
+    const headers = withAuth(init.headers, anonymous ? null : session)
+    headers.set('Accept', 'application/pdf')
+    try {
+      return await fetch(`${API_URL}${path}`, { ...init, body: payload, headers })
+    } catch {
+      throw new ApiError(
+        'Não foi possível conectar ao servidor. Verifique sua conexão.',
+        OFFLINE_STATUS
+      )
+    }
+  }
+
+  const session = anonymous ? null : await readSession()
+  let response = await attempt(session)
+
+  if (response.status === 401 && session) {
+    const current = await readSession()
+    const renewed =
+      current !== null && current.accessToken !== session.accessToken
+        ? current
+        : await refreshSession(session.refreshToken)
+    response = await attempt(renewed)
+  }
+
+  if (!response.ok) {
+    // Em erro a API responde JSON, não PDF — vale ler a mensagem real.
+    const text = await response.text().catch(() => '')
+    let parsed: unknown = null
+    try {
+      parsed = text ? JSON.parse(text) : null
+    } catch {
+      parsed = null
+    }
+    throw new ApiError(messageFrom(parsed, response.status), response.status, parsed)
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFrom(response.headers.get('content-disposition')),
+  }
+}
+
+/** Extrai o nome de arquivo do `Content-Disposition` que a API envia. */
+function filenameFrom(header: string | null): string | null {
+  if (!header) return null
+  const quoted = /filename="([^"]+)"/.exec(header)
+  if (quoted) return quoted[1]
+  const bare = /filename=([^;]+)/.exec(header)
+  return bare ? bare[1].trim() : null
+}
+
 function withAuth(headers: HeadersInit | undefined, session: StoredSession | null): Headers {
   const result = new Headers(headers)
   if (session?.accessToken) result.set('Authorization', `Bearer ${session.accessToken}`)

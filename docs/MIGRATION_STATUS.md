@@ -22,7 +22,7 @@ Atualizado em: 2026-08-13
 | 07 | Analytics, relatórios e notificações | ✅ **Concluída e validada** |
 | 08 | Frontend Expo e design system | ✅ **Concluída e validada** |
 | 09 | Frontend de autenticação e chamados | ✅ **Concluída e validada** |
-| 10 | Frontend de analytics, relatórios e administração | Pendente |
+| 10 | Frontend de analytics, relatórios e administração | ✅ **Concluída e validada** |
 | 11 | Recursos modernos e endurecimento | Pendente |
 | 12 | Migração de dados, operação paralela e cutover | Pendente |
 
@@ -1008,6 +1008,163 @@ cliente** — testar isolamento exige criar um segundo.
 
 ---
 
+## Fase 10 — analytics, relatórios e administração ✅
+
+### 🔴 O achado que mais importa: a camada de consultas estava sem tipagem
+
+Ao escrever o painel, o `tsc` acusou `any` implícito em `data.byStatus.map(...)`.
+A investigação levou a isto:
+
+```
+UseQueryResult<NoInfer<TData>, Error>
+```
+
+`NoInfer` é um utilitário **nativo do TypeScript 5.4**. O projeto estava no
+**5.3.3** (versão que o template do Expo SDK 52 fixa), então `NoInfer<TData>`
+não resolvia e o tipo inteiro degradava para `any` — **em silêncio, sem emitir
+um único erro**.
+
+Consequência: desde a Fase 08, todo `useQuery(...).data` era `any`. Nenhuma
+resposta da API foi verificada contra os tipos declarados. As telas das Fases 08
+e 09 passaram no `typecheck` sem que ele estivesse checando nada nesse caminho.
+
+Corrigido com `typescript@~5.6.3`. Verificação da correção:
+
+```
+antes:  q.data → any                          (nenhum erro ao atribuir a string)
+depois: q.data → NoInfer<number[]> | undefined (erro correto)
+```
+
+Com a tipagem funcionando, `npm run typecheck` passou **limpo** em todo o
+frontend — o código estava certo; faltava a checagem. `moduleResolution` também
+passou de `node10` para `bundler`, que é o modo correto para o Metro, embora não
+tenha sido a causa.
+
+**Lição para as próximas fases: um `typecheck` verde não prova que a tipagem
+existe.** Vale confirmar de tempos em tempos que um erro proposital é detectado.
+
+### Descoberta: analytics e relatórios NÃO são restritos a técnicos
+
+`/analytics` e `/reports/*` não têm `@Roles`. O cliente acessa os dois; o
+service aplica `scopedTicketWhere`, que filtra por `clientId`. Verificado contra
+a API: o painel do cliente devolveu 6 chamados contra 7 do técnico, na mesma
+consulta.
+
+A navegação da Fase 08 escondia "Indicadores" de clientes — estava errada, e foi
+corrigida. O legado gera PDF para qualquer perfil, e é justamente por isso que
+`/parameters/public` é liberado a autenticados: o cabeçalho da empresa entra em
+todo relatório.
+
+Já as áreas administrativas confirmam a correção da Fase 03:
+
+| Área | Exige | Confirmado na API |
+|---|---|---|
+| usuários | `@Roles('technician')` | técnico comum → **200** |
+| módulos (lista/CRUD) | `@RequiresSuperuser()` | técnico comum → **403** |
+| parâmetros (`GET /`, `PATCH`) | `@RequiresSuperuser()` | técnico comum → **403** |
+| pagamentos | `@RequiresSuperuser()` na classe | técnico comum → **403** |
+
+### Descoberta: `"1.500"` em dinheiro vira R$ 1,50
+
+O comentário em `decimal.util.ts` afirmava que separador de milhar era
+rejeitado. **Não era.** A normalização é `text.replace(',', '.')` seguida de
+`/^-?\d+(\.\d+)?$/`, então:
+
+```
+"1500,75"   → 1500.75    ✔
+"1.234,56"  → rejeitado   ✔ (vira "1.234.56")
+"1.500"     → 1.5         ✘ aceito, e quem digitou queria mil e quinhentos
+```
+
+Confirmado na API: o pagamento foi criado com `value: "1.50"`.
+
+Mudar a API **não** é a correção certa: o legado faz
+`float(raw.replace(",", "."))` e produz o mesmo 1.5. Alterar quebraria a
+paridade, que é premissa da operação paralela. Então:
+
+1. o comentário mentiroso do backend foi corrigido, descrevendo o que o código
+   realmente faz e por quê;
+2. a defesa foi posta na **borda de entrada** do frontend
+   (`src/domain/decimal-input.ts`), que recusa a forma ambígua com instrução
+   clara, nos formulários de pagamento e de franquia mensal;
+3. virou o item 24 da tabela de riscos.
+
+### Descoberta: o PDF não pode ser aberto por link
+
+`/reports/*.pdf` exige `Authorization`, e um `<a href>` ou `Linking.openURL` não
+carrega o token. Confirmado: sem cabeçalho, a resposta é **401**. O arquivo vem
+por `fetch` autenticado (`requestBlob`) e só depois é entregue ao sistema —
+`URL.createObjectURL` no Web, `FileSystem` + `Sharing` no nativo, separados por
+extensão de plataforma (`save-file.ts` / `save-file.web.ts`).
+
+### Gráficos: as decisões e a validação de paleta
+
+A paleta foi **validada por script**, não a olho:
+
+| Conjunto | Resultado |
+|---|---|
+| status do legado (`#d92120`, `#ffcc00`, `#1f9d55`, `#234783`) | ✅ separação CVD (pior par ΔE **20,7**) · ✅ piso de visão normal (ΔE **29,7**) · ✅ croma · ❌ banda de luminância · ⚠️ contraste (`#ffcc00` 1,47:1 no claro; `#234783` 1,91:1 no escuro) |
+| magnitude, claro `#0c4e9a` | ✅ todas as checagens |
+| magnitude, escuro `#4f93d9` | ✅ todas as checagens |
+
+As duas checagens que decidem se as cores são **distinguíveis** passam com
+folga. A banda de luminância é critério de uniformidade de paleta categórica, e
+estas são cores de status herdadas — mudá-las quebraria a paridade com o
+`statusMeta` da API, que o teste de contrato confirma byte a byte.
+
+O aviso de contraste **não é descartável**: obriga alívio por rótulo visível.
+Por isso o `StatusBreakdown` mostra rótulo, contagem e percentual ao lado de cada
+segmento, e há teste travando essa exigência.
+
+Outras decisões, cada uma contra um anti-padrão conhecido:
+
+- **Uma hue só** nas barras de módulo/técnico/cliente. Colorir cada barra seria
+  duplo-encoding — o comprimento já carrega a magnitude, e gastar a cor nela
+  sugeriria identidade onde há apenas ordem.
+- **Dois gráficos, não dois eixos.** Chamados e horas por mês são gráficos
+  separados. Um eixo duplo alinharia escalas arbitrárias e inventaria
+  correlação.
+- **"Outros" além de 8 classes**, nunca hues novas.
+- **Rotulagem seletiva** na tendência: só o maior ponto e o último.
+- **Números em destaque** (`StatTile`) quando a história é um número — não um
+  gráfico de barra única.
+- **`#0c4e9a` não é reaproveitada no escuro** (2,13:1 contra a superfície); a
+  variante `#4f93d9` foi escolhida pelo validador.
+
+O KPI de primeira resposta é exibido com aviso na própria tela de que o cálculo
+herdado subestima — melhor que apresentar sem ressalva um número que a operação
+já usa como referência (item 14 dos riscos).
+
+### Entregas
+
+| Arquivo | Papel |
+|---|---|
+| `src/api/analytics.ts`, `reports.ts`, `admin.ts` | superfícies tipadas |
+| `src/api/client.ts` → `requestBlob` | download binário autenticado |
+| `src/download/save-file.ts` / `.web.ts` | entrega do arquivo por plataforma |
+| `src/domain/format.ts` | números, datas puras e máscaras em pt-BR, sem `Intl` |
+| `src/domain/decimal-input.ts` | guarda contra o erro de mil vezes |
+| `src/theme/chart-palette.ts` | paleta dos gráficos e o registro da validação |
+| `src/components/StatTile`, `BarList`, `StatusBreakdown`, `TrendChart`, `DateField` | peças do painel |
+| `app/analytics.tsx` | KPIs, situação, fila, tendências, banco de horas, agregações |
+| `app/reports.tsx` | dois relatórios, em JSON na tela e PDF para download |
+| `app/admin/` | hub, usuários, módulos, parâmetros e pagamentos |
+
+### Validações executadas
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` (frontend, **com tipagem real**) | ✅ sem erros |
+| `npm run lint:check` (`--max-warnings 0`) | ✅ sem erros nem avisos |
+| `npm test` (frontend) | ✅ **123 testes** em 11 suítes (+28 nesta fase) |
+| `npm run build:web` | ✅ **18 rotas** estáticas |
+| `npx expo export -p android` | ✅ bundle gerado (valida a divisão por plataforma) |
+| Backend: `typecheck`, `lint`, `build`, `npm test` | ✅ **452 testes**, sem regressão |
+| Verificação de contrato contra a API | ✅ **30 checagens**, todas conferindo |
+| `validate_palette.js` | executado nos dois modos; resultados na tabela acima |
+
+---
+
 ## Como rodar
 
 ```bash
@@ -1080,6 +1237,9 @@ rede local.
 | 21 | `TicketResponse` não expõe `canEdit`/`canDelete` (só `ActivityResponse` expõe). O frontend espelha a política em `ticket-permissions.ts` — se a regra do servidor mudar, o espelho precisa mudar junto | Médio | Coberto por teste no cliente; a API continua sendo a palavra final |
 | 22 | `canDeleteTicket` no cliente usa `Intl` com `America/Sao_Paulo`. Runtime sem dados de fuso cai no relógio local e pode divergir da API em aparelho fora do fuso | Baixo | Degradação documentada em `ticket-permissions.ts`; só afeta a exibição do botão |
 | 23 | A verificação de contrato (`contract-check.mjs`) roda contra a API local, mas vive no scratchpad e não está versionada | Baixo | Promover a teste e2e do frontend se a checagem passar a ser recorrente |
+| 24 | **`"1.500"` em campo de dinheiro/horas é aceito e vira 1,50** — erro de mil vezes. O comportamento vem do `float()` do legado e é preservado por paridade | 🔴 Alto | Bloqueado na borda de entrada por `src/domain/decimal-input.ts`, com teste. **Qualquer cliente novo da API (script, integração) precisa da mesma guarda** — a API não protege |
+| 25 | ~~TypeScript 5.3 não resolve `NoInfer` do TanStack Query v5: todo `useQuery(...).data` era `any`, sem emitir erro~~ | — | ✅ Resolvido na Fase 10 (`typescript@~5.6.3`). Mantenha o TS ≥ 5.4 ao atualizar o Expo |
+| 26 | O painel exibe o KPI de primeira resposta com aviso de que subestima (item 14). Se o cálculo for corrigido um dia, o aviso precisa sair junto | Baixo | Comentário na própria tela, em `app/analytics.tsx` |
 
 ---
 
@@ -1097,7 +1257,22 @@ Ao concluir cada fase:
 
 ## Próxima fase
 
-**Fase 10 — analytics, relatórios e administração.**
+**Fase 11 — recursos modernos e endurecimento.** Rate limiting, headers de
+segurança, correlation ID e trilha de auditoria.
+
+### Pontos de partida já mapeados
+
+1. **Rate limiting no login é o mais urgente.** `spendDummyWork` fecha o canal
+   lateral de latência (Fase 02), mas nada limita a taxa de tentativas.
+2. **Auditoria**: existe `src/audit/` no `backend/src`, criado e nunca
+   preenchido — conferir antes de começar do zero.
+3. **Correlation ID** combina com o barramento de eventos em processo
+   (`domain-events.service.ts`): o identificador precisa atravessar o handler
+   assíncrono, não só o request.
+4. **Headers**: o `main.ts` já configura CORS e `ValidationPipe`; falta helmet.
+5. O frontend classifica erros por status (`ApiError`), então uma resposta
+   **429** cai hoje na mensagem genérica — vale um caso próprio quando o rate
+   limiting entrar.
 
 ### O que já existe e deve ser reaproveitado
 

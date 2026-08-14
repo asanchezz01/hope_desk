@@ -27,8 +27,23 @@ export function parseDecimalInput(raw: DecimalLike, fieldName: string): Prisma.D
     throw new BadRequestException(`Informe um valor para ${fieldName}.`);
   }
 
-  // Aceita "1234,56" além de "1234.56". Separador de milhar não é aceito, para
-  // não haver ambiguidade entre "1.234" (mil) e "1.234" (um vírgula...).
+  // Aceita "1234,56" além de "1234.56", como `float(raw.replace(",", "."))` do
+  // legado.
+  //
+  // ATENÇÃO — o que este código faz, e NÃO o que seria desejável:
+  //
+  //   "1234,56"  → 1234.56
+  //   "1.234,56" → "1.234.56" → REJEITADO pelo regex abaixo
+  //   "1.500"    → 1.5        ← ACEITO, interpretado como decimal
+  //
+  // O último caso é ambíguo: quem digitou provavelmente queria mil e quinhentos.
+  // O comentário anterior afirmava que separador de milhar era rejeitado; não é,
+  // e nunca foi. Corrigir aqui mudaria o resultado em relação ao Flask, que faz
+  // exatamente a mesma coisa — e paridade é premissa da operação paralela.
+  //
+  // A defesa está na borda de entrada do frontend
+  // (`src/domain/decimal-input.ts`), que recusa a forma ambígua antes de enviar.
+  // Ver o item 24 da tabela de riscos em docs/MIGRATION_STATUS.md.
   const normalized = text.replace(',', '.');
 
   if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
