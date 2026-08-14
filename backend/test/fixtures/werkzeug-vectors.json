@@ -1,0 +1,216 @@
+{
+  "generatedBy": "werkzeug 3.1.3 (venv do legado)",
+  "note": "NÃO EDITAR À MÃO. Regenerar com: .venv/Scripts/python.exe scripts/gen_werkzeug_vectors.py",
+  "vectors": [
+    {
+      "password": "newhope",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$idSu0FSbonSt5IKG$6698e4cc1cca7fd6ec965eab2e44a667a543fd082e184d83489e35fbf718a46ca145943ea3a07b37581bf2d3a0c83a13c7e51580e21e6d232a832b38ecfad7a7"
+    },
+    {
+      "password": "newhope",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$4R9LH0Kuxh1iue3j$758935455f74f67a8cf482cc6bcb2875fef7e7e2edb1ca99275fc8a42e0dfb3953a5ee37902c7ae3b42c61825f008299bef0e6f590830e0cfb0b3e1db5fe35f7"
+    },
+    {
+      "password": "newhope",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$4bFW5wLtvZPhCZqM$e3fbf618449bb155a6896bdcbb2d9183e68bc47a4a889c1b0c5defd80cc942a9"
+    },
+    {
+      "password": "newhope",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$2TZLQmCi0O5BjpcM$6bc6d081f16586bedc313ac45c82386cac1f014b57dae03dabb241d5b68a5b8f"
+    },
+    {
+      "password": "newhope",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$4PsQfHQrfJQpFrlB$09c6c51e2f22fc4247676f57aae0fe0e1e52fed6c18b170b3f85537eeabad835d89f653a9877c8a98b90b29dfd01fe83190003ece849ada92658960e4bd09e96"
+    },
+    {
+      "password": "newhope",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$3DlWztmJoPfEfPYl$1dde5acd00293316876f610f9d27c0b9c2a99b0a"
+    },
+    {
+      "password": "Senha@123",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$Ddl6VwBOazBIotNa$040b04df4dce21b4be00ea707108c23553ab8346d4d30982c88925ce92c65e4ec287d27b8f821d7dcd22dbee5b2489b09dd541a4250f55fc590336890a517720"
+    },
+    {
+      "password": "Senha@123",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$WvXfUuDlB47bIQ5E$bd7b5738e9d3b99c21d95b8569cceabee9c48bee364c5bfa7f098f24fe0a36d558f917ee73ceeb5ce282005402c16fdeee831c2e2507212a747158cc01bd7674"
+    },
+    {
+      "password": "Senha@123",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$58KRKuVMr58nzU3Q$432e7e0176961baff86634d6d597b7ea122e52cb178653d7c0572c1907abf67e"
+    },
+    {
+      "password": "Senha@123",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$5ROSvNzdjCl4fqkI$4992d076565a86291254a131a5c35eca7f48501955b9a599660b8d170aa96a09"
+    },
+    {
+      "password": "Senha@123",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$8IRxIkUTJulGECyG$bee83fb2562362cf5c536c3190d6625deb50ec39f494fecf0d892f3c43622df80d26f11fbf891f586da680979dd46bb1bff121dcf6a7f99649d143af7337bbb4"
+    },
+    {
+      "password": "Senha@123",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$aaxoG1OPPEylqDgu$e37ae6f2305c11907d87e7a129e523b4b021c2d7"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$lrhDuscnjhfMuIWm$390c2deb70c8e3829c4a5e11c72285276a5734b2bb38dc0a5be4431c9e27d54a1faa6ceff07c9d78b7e5eaf55f5f665e2125e3e7d139d1639d1aa20a381a3569"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$wZT0cKB3xGSe97ky$be5bb0332bea7b9726b406c71d5d348c068dac1d9156f347fb988e1e6c57233b34093676df1ed24f9c862a70ee27f562b6d2f323f8aaa159b5205455998d451a"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$zNjHgGDYQmG8bFsX$5bc23e4f0e6b92051d80c9094ef6bae59a1379dddd0b9536c7e4d2342fa8699e"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$uuANOHzB4AN0XlJs$7662cdb69eba1fd8826aab68a9cd4c4b8b6456eb6761feb7a5bdb9001c02c156"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$gM024rVKTuZqzlhH$a409cfd7751ac96b515b1a5d28bb82ccd61c00435038f6910dda085bb3227c043cb1c7c5b18a11226b0fcc3cd6ab2c91b85b341210a58092ae7341fa86e78709"
+    },
+    {
+      "password": "senha com espaco",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$D0oJQO8fcCBwLDIr$0389793100db2e49e1e12521b89bb12669bc75f2"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$NlomTiMGHKcooURW$05c72e274c452ae4b37040e14f430f62a6b95c6b2a7611326d7a9192128d8b8222f43a6d84af7111404324a2204e234af1ce3d0a1270ed0778cc648969fd5446"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$fGR90Ke64MUiPVNM$5a5db3708599262462e866fe5d61bb82e0a33f08ca2c218a375b104583b0ae1163f64fbe94776091a2681ef6d05072d25d93edef7f556f70f27ff0843d6cb4ee"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$h1grmcxuDKhzDw6d$2b95ea3a6e0c472e0d81a3b45871149ceba0ad7ce3f1f04dac6e34b6b7ae7243"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$ppoGADFC4zh35Jk9$aa0d25edac13e902a4389ea893a511fd8d6ce24a9fcad2d65a553504333ccc6f"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$HhNmNIOvnPwCOlZO$67d09d2e529b6d0fc6ab3b0d8df4abc3a748603e0331bf20d9600a3c27bf8e25e7fb125a3fb9fbe7bb3fd78380e3fdca79d266af54b96160e316bcb1f73e87f0"
+    },
+    {
+      "password": "aB3$xyz!",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$ZY4Zn0NBJJFzTSeD$3d8c2ca2db95ef8b9524dc579db841a47c165d80"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$9aW6wcx8ZZMAR7MO$0312fd04cc1b21c64c82ae640a32564fa261d31eb6842d137ff5193e5ab3592d864e609c0db7a584863b34fbb2d2ff8eede1086738a9d69a04802eac3b5edd73"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$ifP4CcaFzRUiXnIP$28e48b6a2a6afa2054905c8ffb7cc1c6754094c7f010a858419ecdc0bd5f059b5532daac79053c301e6be3011d7f647bf7df3bdbad152b6c826eb80cc21708f8"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$QQFRkslaNNYLSN6A$71b998e9302291c84fd2c4729863c15d12e4c0be38ca93ed288c461fb648e041"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$0p2GjDeh9fLGatsZ$19f1e133ffb23247ec886fdb34682f93d657e250b1f4f0cdabb3a34acb5e7456"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$z580HcZZJrAM5FVw$7bdc1c552631125025764d9abe48378e4b8e73a2cdd1c6295908ebf47bfefe254a892036d8765fdfb3c1d1714c39e2306906304cea4fa6c2eb11f6f170a90d15"
+    },
+    {
+      "password": "çãõÜ-acentos",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$JuMxi8psB7hTQR3m$3092386ad986a20ae3d3d936eafc74f5f4e758cb"
+    },
+    {
+      "password": "123456",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$AN0KO7XAcO3vJqvC$9bc0b92a5504493126d3d010b3265e553f5e692b16a888835edd32c86a6d7bde6376c13ef16e381ec3fb90a10d149f26333c6a6abc038deb17f8a4cd00c63559"
+    },
+    {
+      "password": "123456",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$4e5T4A92Hueay1ms$8de4ce25d412b5bfa93cf3fa9cd69d8ce48e5d31a24757719e8f6e610a8bd69f3d061a5d6f048a04e877c746c4ea2ffb5071e8be61151b6fc8d7a5a8d888868f"
+    },
+    {
+      "password": "123456",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$cyu8VnHhS2v0boiv$42cca64de76c70512cc3f0003c56d2945cfc84d8be9c504cd5596cf4a14c6b90"
+    },
+    {
+      "password": "123456",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$2l1VUZwNlAlK9Bj7$3f4e401e2691d41b3d6998105be7aa30ab5a4f70e83328d7787ae0df68d0b2d9"
+    },
+    {
+      "password": "123456",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$qIzioZmXYyYka0mH$d8c943127e416d9e4e7ec49c5cbc0ae690c41680ec3dc3893c6c15894752e35088755880c040636062b0676cf4a85cb3c64c6b7f2f8e85562e36920f070da604"
+    },
+    {
+      "password": "123456",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$97t7PeMSLO6nmWAw$77b061b40ff68fa29848e0afe1a717bfb2376337"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "scrypt",
+      "hash": "scrypt:32768:8:1$HMWmf1hzFW8Ik9gn$820058a21bc0ad38d3724ac831b18870782b17d6878bfc9329d42a7c25a973d3a59c36b9f5ec86caa08602b0aa2be418a044f3697e9bf362c8db175a0713b9da"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "scrypt:16384:8:1",
+      "hash": "scrypt:16384:8:1$ycSv1PdIYh6Urkvw$5bc3c50f34a9b52528fb2cd60f76910442a12bd6bbb70e8b222fb9422d4ea38d4f5ccf9aeb553925923673874ffab05e798e7bc18177b95765a42c4d0bde6cdd"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "pbkdf2:sha256",
+      "hash": "pbkdf2:sha256:1000000$7MyKv3hWjIEX5FY8$b69a849369d231d466f3a9751120c0d617168914b32dd1d7df47e4a379edbfdd"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "pbkdf2:sha256:1000",
+      "hash": "pbkdf2:sha256:1000$u0AaGEDO0xzrPlTv$ebd8fce2cd587958273d004df71cd5407e0280a16d2e918d121e1e5c3dcf2213"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "pbkdf2:sha512",
+      "hash": "pbkdf2:sha512:1000000$Gv3qXmCeytWYEaKz$c03040b721e94396c90d8e4d561b40e57314238abcd7cf2b99a4ecd333cefe37acad573b13b447918d49f5931bba3687808ecd2efb4f8b56aedef99625875327"
+    },
+    {
+      "password": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "method": "pbkdf2:sha1:150000",
+      "hash": "pbkdf2:sha1:150000$UaxK5K1cVFuXYbYb$5229c1205e1b4505d56d20f13ecff0f89bf4688f"
+    }
+  ]
+}

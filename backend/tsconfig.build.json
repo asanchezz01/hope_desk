@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // `rootDir` fixo é o que garante que a saída seja `dist/main.js`, e não
+    // `dist/src/main.js`. Sem ele o TypeScript deriva a raiz do menor diretório
+    // comum entre os arquivos compilados: bastava `prisma/seed.ts` entrar no
+    // build para a raiz virar `.` e todo o dist ganhar um nível a mais —
+    // quebrando `start:prod` e o CMD do Dockerfile, que apontam para
+    // `dist/main`. Fixando aqui, um arquivo novo fora de `src/` falha o build
+    // em vez de mudar o layout em silêncio.
+    "rootDir": "src"
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    // O seed roda com tsx (`npm run prisma:seed`), não precisa ser compilado.
+    "prisma",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts"
+  ]
+}

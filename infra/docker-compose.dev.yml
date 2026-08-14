@@ -1,0 +1,74 @@
+# Infraestrutura de DESENVOLVIMENTO do Hope Desk.
+#
+# Uso:  docker compose -f infra/docker-compose.dev.yml up -d
+#
+# Este arquivo nunca deve apontar para a base de produção. O Postgres aqui é
+# descartável e serve para migrations, testes de integração e casos dourados.
+name: hope-desk-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hope-desk-postgres-dev
+    environment:
+      POSTGRES_DB: hopedesk
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # 5433 no host para não colidir com um Postgres local na 5432.
+      - "5433:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hopedesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Banco efêmero (tmpfs) para a suíte de integração: sempre limpo, nunca persiste.
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: hope-desk-postgres-test
+    environment:
+      POSTGRES_DB: hopedesk_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hopedesk_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      # O contexto é o diretório do backend, não o diretório deste arquivo.
+      context: ../backend
+      dockerfile: Dockerfile.dev
+    container_name: hope-desk-backend-dev
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hopedesk?schema=public
+      NODE_ENV: development
+      PORT: "3000"
+      API_PREFIX: api/v1
+      CORS_ORIGIN: http://localhost:8081
+      JWT_SECRET: dev-access-secret-not-for-production
+      JWT_REFRESH_SECRET: dev-refresh-secret-not-for-production
+      MAIL_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../backend/src:/app/src
+      - ../backend/prisma:/app/prisma
+      # Mantém o node_modules da imagem, sem ser sobrescrito pelo host.
+      - backend_node_modules:/app/node_modules
+
+volumes:
+  postgres_dev_data:
+  backend_node_modules:

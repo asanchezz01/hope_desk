@@ -1,0 +1,15 @@
+# Normaliza quebras de linha: LF na árvore de trabalho em qualquer plataforma.
+# Sem isso, core.autocrlf=true (padrão em instalações Windows) reescreve os
+# fontes em CRLF no checkout e o Prettier acusa 17k erros de `␍`.
+* text=auto eol=lf
+
+# Binários — nunca converter.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

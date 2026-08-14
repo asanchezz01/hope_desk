@@ -1,0 +1,987 @@
+{
+  "generatedBy": "app.py do legado (calculate_accumulated_hours executado de verdade)",
+  "note": "NÃO EDITAR À MÃO. Regenerar com: .venv/Scripts/python.exe scripts/gen_hours_bank_golden.py",
+  "cases": [
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [],
+      "payments": [],
+      "name": "sem atividades e sem pagamentos",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "consumo abaixo da franquia nao gera saldo",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T16:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T16:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "consumo exatamente igual a franquia nao gera saldo",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "excesso simples em um mes",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 4.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-01-05T08:00:00",
+          "endedAt": "2026-01-05T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-01-06T08:00:00",
+          "endedAt": "2026-01-06T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-02-05T08:00:00",
+          "endedAt": "2026-02-05T10:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "excesso calculado mes a mes, sem compensar entre meses",
+      "reference": "2026-04-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 4.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-01-31T20:00:00",
+          "endedAt": "2026-02-01T04:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade atravessa a virada do mes e e dividida proporcionalmente",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-01-31T22:00:00",
+          "endedAt": "2026-03-01T02:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade longa atravessa tres meses",
+      "reference": "2026-05-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 656.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2025-07-01",
+      "activities": [
+        {
+          "startedAt": "2025-12-31T21:00:00",
+          "endedAt": "2026-01-01T05:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade atravessa a virada do ano",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-03-01",
+      "activities": [
+        {
+          "startedAt": "2026-02-28T20:00:00",
+          "endedAt": "2026-03-01T04:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade recortada pelo inicio do ciclo",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-03-01T00:00:00",
+        "cycleEnd": "2026-09-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-15T08:00:00",
+          "endedAt": "2026-03-15T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade recortada pela referencia",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-03-01",
+      "activities": [
+        {
+          "startedAt": "2026-01-10T08:00:00",
+          "endedAt": "2026-01-10T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade inteiramente fora do ciclo e ignorada",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-03-01T00:00:00",
+        "cycleEnd": "2026-09-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-03-10",
+          "paidHours": "2"
+        }
+      ],
+      "name": "horas pagas descontam do excesso",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 2.0,
+        "paidHoursInCycle": 2.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-03-10",
+          "paidHours": "100"
+        }
+      ],
+      "name": "saldo nunca fica negativo mesmo pagando mais que o excesso",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0,
+        "paidHoursInCycle": 100.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-03-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-02-20",
+          "paidHours": "5"
+        },
+        {
+          "paidAt": "2026-03-10",
+          "paidHours": "1"
+        }
+      ],
+      "name": "pagamento fora do ciclo nao e considerado",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 3.0,
+        "paidHoursInCycle": 1.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-03-01T00:00:00",
+        "cycleEnd": "2026-09-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-03-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-03-01",
+          "paidHours": "1"
+        }
+      ],
+      "name": "pagamento no primeiro dia do ciclo conta",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 3.0,
+        "paidHoursInCycle": 1.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-03-01T00:00:00",
+        "cycleEnd": "2026-09-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-03-15",
+          "paidHours": "1"
+        }
+      ],
+      "name": "pagamento no dia da referencia conta (limite inclusivo)",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 3.0,
+        "paidHoursInCycle": 1.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-15",
+      "activities": [
+        {
+          "startedAt": "2026-07-10T08:00:00",
+          "endedAt": "2026-07-10T20:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-08-01T08:00:00",
+          "endedAt": "2026-08-01T20:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-08-02T08:00:00",
+          "endedAt": "2026-08-02T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "ciclo semestral avanca a partir da data de fechamento",
+      "reference": "2026-08-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 8.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-07-15T00:00:00",
+        "cycleEnd": "2027-01-15T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2030-05-10",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "ciclo recua quando a data de fechamento e futura",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2025-11-10T00:00:00",
+        "cycleEnd": "2026-05-10T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "",
+      "activities": [
+        {
+          "startedAt": "2026-02-10T08:00:00",
+          "endedAt": "2026-02-10T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "data de fechamento invalida cai para 1 de janeiro do ano da referencia",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "nao-e-data",
+      "activities": [
+        {
+          "startedAt": "2026-02-10T08:00:00",
+          "endedAt": "2026-02-10T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "data de fechamento com texto invalido tambem cai para 1 de janeiro",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-08-31",
+      "activities": [
+        {
+          "startedAt": "2026-09-01T08:00:00",
+          "endedAt": "2026-09-01T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "fechamento no dia 31 trunca no mes mais curto",
+      "reference": "2026-09-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-08-31T00:00:00",
+        "cycleEnd": "2027-02-28T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "8,5",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "franquia com virgula decimal",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 3.5,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 8.5,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "abc",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "franquia invalida cai para 16",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 4.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "-5",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T10:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "franquia negativa e tratada como zero",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 2.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "0",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T10:30:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "franquia zero faz todo consumo virar excesso",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 2.5,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 0.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "client",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-04T08:00:00",
+          "endedAt": "2026-03-04T18:00:00",
+          "clientId": 2
+        }
+      ],
+      "payments": [],
+      "name": "visao do cliente filtra atividades de outros clientes",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 4.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 9,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T18:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T18:00:00",
+          "clientId": 2
+        }
+      ],
+      "payments": [],
+      "name": "visao do tecnico soma todos os clientes",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 4.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "1",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T09:20:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "minutos fracionarios preservam precisao",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.33,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 1.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "1",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-01T08:00:00",
+          "endedAt": "2026-03-01T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-04T08:00:00",
+          "endedAt": "2026-03-04T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-05T08:00:00",
+          "endedAt": "2026-03-05T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-06T08:00:00",
+          "endedAt": "2026-03-06T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-07T08:00:00",
+          "endedAt": "2026-03-07T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-08T08:00:00",
+          "endedAt": "2026-03-08T08:30:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-09T08:00:00",
+          "endedAt": "2026-03-09T08:30:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "muitas atividades curtas somam corretamente",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 3.5,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 1.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-02T08:00:00",
+          "endedAt": "2026-03-02T20:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-03-03T08:00:00",
+          "endedAt": "2026-03-03T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-03-01",
+          "paidHours": "1"
+        },
+        {
+          "paidAt": "2026-03-31",
+          "paidHours": "2"
+        },
+        {
+          "paidAt": "2026-04-01",
+          "paidHours": "4"
+        }
+      ],
+      "name": "horas pagas do mes usam limite superior exclusivo",
+      "reference": "2026-03-31T23:00:00",
+      "paidHoursMonth": [
+        2026,
+        3
+      ],
+      "expected": {
+        "netAccumulatedHours": 5.0,
+        "paidHoursInCycle": 3.0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00",
+        "paidHoursInMonth": 3.0
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-03-01",
+      "activities": [
+        {
+          "startedAt": "2026-02-28T20:00:00",
+          "endedAt": "2026-03-01T00:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade que termina exatamente no inicio do ciclo e ignorada",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-03-01T00:00:00",
+        "cycleEnd": "2026-09-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-01",
+      "activities": [
+        {
+          "startedAt": "2026-03-15T12:00:00",
+          "endedAt": "2026-03-15T14:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "atividade que comeca exatamente na referencia e ignorada",
+      "reference": "2026-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-01T00:00:00",
+        "cycleEnd": "2026-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2028-01-01",
+      "activities": [
+        {
+          "startedAt": "2028-02-29T08:00:00",
+          "endedAt": "2028-02-29T20:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [],
+      "name": "fevereiro em ano bissexto",
+      "reference": "2028-03-15T12:00:00",
+      "expected": {
+        "netAccumulatedHours": 0.0,
+        "paidHoursInCycle": 0,
+        "franchiseHours": 16.0,
+        "cycleStart": "2028-01-01T00:00:00",
+        "cycleEnd": "2028-07-01T00:00:00"
+      }
+    },
+    {
+      "role": "technician",
+      "userId": 1,
+      "monthlyHoursAllowance": "16",
+      "hoursBankClosingDate": "2026-01-10",
+      "activities": [
+        {
+          "startedAt": "2026-01-15T08:00:00",
+          "endedAt": "2026-01-15T20:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-01-16T08:00:00",
+          "endedAt": "2026-01-16T20:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-02-28T18:00:00",
+          "endedAt": "2026-03-01T06:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-04-10T09:15:00",
+          "endedAt": "2026-04-10T17:45:00",
+          "clientId": 2
+        },
+        {
+          "startedAt": "2026-05-01T00:00:00",
+          "endedAt": "2026-05-01T12:00:00",
+          "clientId": 1
+        },
+        {
+          "startedAt": "2026-06-19T22:00:00",
+          "endedAt": "2026-06-20T10:00:00",
+          "clientId": 1
+        }
+      ],
+      "payments": [
+        {
+          "paidAt": "2026-02-05",
+          "paidHours": "3,5"
+        },
+        {
+          "paidAt": "2026-04-15",
+          "paidHours": "2"
+        },
+        {
+          "paidAt": "2026-06-01",
+          "paidHours": "1,25"
+        }
+      ],
+      "name": "cenario combinado com varios meses e pagamentos",
+      "reference": "2026-06-20T18:30:00",
+      "expected": {
+        "netAccumulatedHours": 1.25,
+        "paidHoursInCycle": 6.75,
+        "franchiseHours": 16.0,
+        "cycleStart": "2026-01-10T00:00:00",
+        "cycleEnd": "2026-07-10T00:00:00"
+      }
+    }
+  ]
+}
