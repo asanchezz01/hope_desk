@@ -13,6 +13,12 @@ instance/
 .env
 .env.local
 .env.*.local
+# `.env.prod.example` é o molde e fica versionado. Qualquer outra variação
+# (`.env.prod.test`, usada para subir a stack de produção na máquina local)
+# carrega valor real ou de teste e não deve entrar no repositório — que, além
+# de tudo, é público.
+.env.prod.*
+!.env.prod.example
 
 # Node / TypeScript
 node_modules/
@@ -29,3 +35,6 @@ web-build/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Dumps da base legada: dados reais (hashes de senha, e-mails). Nunca versionar.
+backups/

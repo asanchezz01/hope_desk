@@ -8,7 +8,20 @@
     // quebrando `start:prod` e o CMD do Dockerfile, que apontam para
     // `dist/main`. Fixando aqui, um arquivo novo fora de `src/` falha o build
     // em vez de mudar o layout em silêncio.
-    "rootDir": "src"
+    "rootDir": "src",
+
+    // O arquivo de estado incremental vive DENTRO de `dist`.
+    //
+    // Fora dele, `nest build` mentia: o `nest-cli.json` usa
+    // `deleteOutDir: true`, então o `dist` era apagado, mas o
+    // `tsconfig.build.tsbuildinfo` na raiz continuava dizendo "tudo já
+    // compilado" — o TypeScript não emitia nada e o comando terminava com
+    // código 0 e diretório vazio. `start:prod` e o CMD do Dockerfile falhavam
+    // depois com `Cannot find module dist/main`, longe da causa.
+    //
+    // Guardando o estado dentro da saída, apagar uma coisa apaga a outra: as
+    // duas nunca discordam.
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
   },
   "exclude": [
     "node_modules",

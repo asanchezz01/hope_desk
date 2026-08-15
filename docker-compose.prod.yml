@@ -1,0 +1,91 @@
+# Stack de produção do Hope Desk na VPS.
+#
+# Convive com a stack `hopecash`, que já ocupa a máquina: o
+# nginx-proxy-manager dela é dono das portas 80/443 e termina o TLS. Por isso
+# nada aqui publica porta pública — os serviços entram na rede `hopecash_proxy`
+# e o proxy os alcança pelo NOME DO CONTAINER.
+#
+#   hopedesk.hopecash.tech      → hopedesk-web:80
+#   hopedesk-api.hopecash.tech  → hopedesk-api:3000
+#
+# As portas de loopback existem só para diagnóstico por SSH; não são acessíveis
+# de fora da máquina.
+
+name: hopedesk
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hopedesk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hopedesk}
+      POSTGRES_USER: ${POSTGRES_USER:-hopedesk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      # Sem isto, um `initdb` feito por imagem com locale diferente muda a
+      # ordenação de texto — e a listagem de chamados sai em outra ordem.
+      LANG: C.UTF-8
+    volumes:
+      - hopedesk_pgdata:/var/lib/postgresql/data
+    # Somente loopback: o banco não é serviço público, e o proxy não fala com ele.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopedesk} -d ${POSTGRES_DB:-hopedesk}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - data
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hopedesk-api:latest
+    container_name: hopedesk-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # O host é o nome do serviço na rede `data`.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hopedesk}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hopedesk}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-3002}:3000"
+    networks:
+      - data
+      - proxy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Entra no BUNDLE, não no ambiente do container: mudar isto exige
+        # reconstruir a imagem, e o deploy faz isso.
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-https://hopedesk-api.hopecash.tech/api/v1}
+    image: hopedesk-web:latest
+    container_name: hopedesk-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-8093}:80"
+    networks:
+      - proxy
+
+volumes:
+  hopedesk_pgdata:
+
+networks:
+  # Criada pela stack hopecash; é onde o proxy-manager enxerga os containers.
+  proxy:
+    external: true
+    name: hopecash_proxy
+  # Rede interna do Hope Desk: só API e banco. O proxy não entra aqui.
+  data:
+    name: hopedesk_data

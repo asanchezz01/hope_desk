@@ -1,6 +1,6 @@
 # Hope Desk — estado da migração
 
-Atualizado em: 2026-08-13
+Atualizado em: 2026-08-15
 
 ## Fonte de verdade
 
@@ -23,8 +23,9 @@ Atualizado em: 2026-08-13
 | 08 | Frontend Expo e design system | ✅ **Concluída e validada** |
 | 09 | Frontend de autenticação e chamados | ✅ **Concluída e validada** |
 | 10 | Frontend de analytics, relatórios e administração | ✅ **Concluída e validada** |
-| 11 | Recursos modernos e endurecimento | Pendente |
-| 12 | Migração de dados, operação paralela e cutover | Pendente |
+| 11 | Recursos modernos e endurecimento | ✅ **Concluída e validada** |
+| 12 | Migração de dados, operação paralela e cutover | 🟡 Migração local validada; **cutover pendente** (ver `CUTOVER.md`) |
+| 13 | Publicação na VPS (deploy contínuo) | 🟡 Infra e Action prontas; ver `DEPLOY.md` |
 
 ---
 
@@ -1165,6 +1166,402 @@ já usa como referência (item 14 dos riscos).
 
 ---
 
+## Fase 11 — recursos modernos e endurecimento ✅
+
+Executada em 2026-08-14/15. O prompt pedia para **listar** o que pode entrar sem
+mudar regra de negócio e implementar só o autorizado. A tabela abaixo é essa
+lista, com o desfecho de cada item.
+
+### O que entrou, e o que ficou de fora com motivo
+
+| Prioridade do roadmap | Situação | Por quê |
+|---|---|---|
+| rate limiting | ✅ implementado | três níveis, em memória |
+| headers seguros | ✅ implementado | helmet, com duas exceções justificadas |
+| correlation ID | ✅ implementado | middleware + `AsyncLocalStorage` |
+| logs estruturados | ✅ implementado | JSON só em produção |
+| auditoria | ✅ implementado | 21 ações, gravação **e** consulta |
+| atualização otimista com rollback | ✅ implementado | só na mudança de status |
+| pull-to-refresh | ✅ implementado | listagem de chamados |
+| filtros salvos | ✅ implementado | período e situação, não a busca |
+| command palette na Web | ✅ implementado | Ctrl/Cmd+K, comandos derivados da navegação |
+| métricas | ⚠️ parcial | há uma linha por requisição concluída, com método, rota, status e duração — o suficiente para responder "qual rota está lenta" e "quantos 4xx". Um `/metrics` Prometheus exigiria um coletor: serviço novo, que o prompt manda não introduzir sem necessidade documentada |
+| central de notificações | ❌ não implementado | exige persistir notificação por usuário (tabela nova + estado de leitura). É funcionalidade nova, não endurecimento |
+| realtime | ❌ não implementado | WebSocket com uma instância é viável, mas com mais de uma exige barramento (Redis/pub-sub) — o serviço adicional que o prompt restringe |
+| push com deep link | ❌ não implementado | depende de credenciais FCM/APNs e de build nativo; nada disso existe neste ambiente |
+| rascunhos offline | ❌ não implementado | fila de escrita offline reabre conflito de horário e janela de exclusão do lado do cliente — regra de negócio duplicada, exatamente o que o prompt proíbe |
+| compartilhamento nativo | ✅ já existia | `expo-sharing` no download de PDF (Fase 10) |
+| biometria opcional | ❌ não implementado | exigiria `expo-local-authentication` e decidir se o refresh token fica atrás do gate biométrico — decisão de segurança que não cabe assumir sozinho |
+
+### Rate limiting: a ordem dos guards é o ponto
+
+```ts
+{ provide: APP_GUARD, useClass: ThrottlerGuard },   // 1º
+{ provide: APP_GUARD, useClass: JwtAuthGuard },     // 2º
+{ provide: APP_GUARD, useClass: RolesGuard },       // 3º
+```
+
+O limite vem **antes** da autenticação. Invertido, uma rajada de tentativas de
+login pagaria o custo do bcrypt (≈222 ms cada, medidos na Fase 02) antes de ser
+recusada — o atacante conseguiria negação de serviço usando justamente a defesa
+contra força bruta.
+
+Três níveis: 120/min geral, 10/min nas rotas de autenticação, 3 por 5 minutos na
+recuperação de senha (cada tentativa dispara e-mail, então o abuso vira spam
+contra um terceiro).
+
+**Armazenamento em memória**, deliberado: a aplicação roda em instância única e
+o prompt manda não introduzir Redis sem justificar. A consequência fica
+registrada — com N instâncias o limite efetivo vira `limite × N`. Escalar
+horizontalmente é o gatilho para trocar o storage.
+
+### Correlation ID: por que `AsyncLocalStorage`, e não um parâmetro
+
+O identificador precisa aparecer onde não chega `Request`: o barramento de
+eventos em processo, o `MailerService` e a trilha de auditoria. Publicar evento
+é assíncrono e roda depois do commit — sem armazenamento por contexto, o log do
+handler ficaria órfão do request que o originou, que é justamente quando o ID
+serve para alguma coisa.
+
+É **middleware**, não interceptor: um 401 ou um 429 nunca chega aos
+interceptors, e são as respostas que mais interessa rastrear.
+
+Um ID vindo do cliente é aceito (para atravessar proxy), mas validado contra
+`^[A-Za-z0-9._-]{8,128}$` antes de entrar em qualquer log — sem isso, alguém
+injetaria quebras de linha e forjaria registros.
+
+### Auditoria: o critério e o que ele deixa de fora
+
+O que entra é **privilégio, dinheiro, exclusão e autenticação**. Leitura não
+entra: encheria a tabela sem responder a nenhuma pergunta real da operação.
+
+Sete das 21 ações estavam **declaradas e nunca gravadas** — resquício do
+trabalho parcial encontrado nesta fase. Foram ligadas: criação e edição de
+usuário, criação e edição de módulo, pedido e conclusão de recuperação de senha
+e **detecção de reuso de refresh token**.
+
+A última é a mais importante da lista: é o único evento que é indício de
+*ataque*, e não de uso normal. Ela também dispara por defeito de cliente (dois
+refreshes concorrentes com o mesmo token) — e é exatamente por isso que precisa
+de registro: sem a trilha, as duas causas produzem o mesmo sintoma (logout
+inexplicado) e são indistinguíveis depois do fato.
+
+Decisões que valem registro:
+
+- **`AuditService.record` nunca lança.** Uma falha de gravação deixa buraco na
+  trilha em vez de abortar a operação. Para chamados internos, recusar uma
+  exclusão legítima porque o INSERT de auditoria falhou é pior do que perder o
+  registro. Um sistema com exigência regulatória inverteria essa decisão.
+- **Higienização por lista de bloqueio**, com objetos aninhados colapsados em
+  `[objeto]`: aninhamento é a forma mais fácil de um segredo escapar do filtro.
+  Coberto por teste que varre a tabela inteira procurando as senhas usadas.
+- **Edição de usuário é registrada pelos CAMPOS alterados**, não pelos valores
+  (`changedFields: 'name,password'`). Guardar conteúdo transformaria a trilha
+  num segundo lugar de onde vazar dado.
+- **`onDelete: SetNull` com cópia histórica do e-mail**: a trilha sobrevive à
+  exclusão do ator, que é o caso em que ela mais importa.
+- **Consulta superuser-only, sem escrita nem exclusão pela API.** Trilha que o
+  próprio sistema deixa apagar não serve como trilha. A restrição é mais forte
+  aqui do que nas outras áreas administrativas: a trilha registra quem fez o quê
+  e de qual endereço, e abri-la a todo técnico transformaria o recurso que
+  vigia o privilégio em vigilância de colegas.
+
+### Um erro de teste que se escondia na ordem de execução
+
+A primeira execução completa da suíte de integração falhou **38 testes**; a
+segunda passou inteira, sem mudar uma linha. A causa:
+
+`test/security/rate-limit.e2e-spec.ts` escreve limites apertados em
+`process.env` antes de subir a aplicação. Com `--runInBand`, todos os arquivos
+compartilham o **mesmo processo**, e o ambiente não é restaurado entre eles. O
+`setup-e2e.ts` levantava o teto com `??=` — que não sobrescreve valor já
+definido. Resultado: toda suíte que rodasse **depois** da de rate limiting
+importava `throttler.config` com limite 3 e tomava 429 no quarto login.
+
+Como o sequencer do Jest ordena os arquivos por tempo de execução em cache, a
+ordem mudava entre execuções — e com ela o resultado da suíte.
+
+Corrigido na raiz: o `setup-e2e.ts` agora atribui **incondicionalmente**, e ele
+roda antes de cada arquivo. O spec dedicado continua vencendo porque escreve
+depois, no próprio corpo. Verificado reproduzindo o cenário exato
+(`THROTTLE_AUTH_LIMIT=3 jest test/auth`): antes da correção, 28 falhas; depois,
+44 testes passando.
+
+### Frontend
+
+| Peça | Papel |
+|---|---|
+| `src/api/client.ts` | envia `x-request-id` por requisição; `ApiError` ganha `isRateLimited`, `retryAfterSeconds` e `correlationId` |
+| `src/providers/QueryProvider.tsx` | `shouldRetryQuery`: nunca repete 4xx |
+| `src/components/ErrorState` | 429 sem botão "tentar novamente" |
+| `src/hooks/useTickets.ts` | mudança de status otimista com rollback |
+| `src/storage/preferences.ts` | filtros salvos, validados na leitura |
+| `app/index.tsx` | pull-to-refresh e hidratação dos filtros |
+| `src/components/CommandPalette/` | Ctrl/Cmd+K na Web, com filtro sem acento |
+| `app/_layout.tsx` | gate corrigido: o `Slot` é montado em todo render |
+
+No backend, além do que já foi descrito: `CorrelationIdMiddleware` registra uma
+linha por requisição concluída (`GET /api/v1/tickets 401 12.3ms`), inclusive as
+recusadas em guard. O handler de `finish` **reentra no contexto** de propósito —
+ele roda fora do escopo assíncrono original, e sem isso a linha sairia sem
+correlation ID nem usuário, que são os dois campos que a tornam útil.
+
+Pontos que valem registro:
+
+- **O 429 não podia cair na mensagem genérica.** "Não foi possível concluir"
+  leva a pessoa a tentar de novo imediatamente — que é exatamente o que o limite
+  existe para impedir. A mensagem agora informa a espera lida do `Retry-After`,
+  e o `ErrorState` esconde o botão de repetir.
+- **A repetição automática do TanStack Query precisou ser restringida.** Com
+  `retry: 1`, cada 429 gerava mais uma tentativa contra o mesmo limite estourado.
+  Nenhum 4xx é repetido: são recusas determinísticas.
+- **Otimismo só na mudança de status.** É a única mutação cujo resultado é
+  previsível. Criar e editar chamado dependem de campos que só o servidor decide
+  (número, timestamps, cliente resolvido); adivinhá-los seria mostrar dado falso.
+  O `cancelQueries` no `onMutate` impede que um refetch em voo reponha o valor
+  antigo depois da escrita otimista.
+- **O termo de busca não é salvo**, só período e situação. Reabrir o aplicativo
+  e encontrar a lista filtrada por um texto digitado dias atrás parece defeito.
+- **Filtros lidos do disco são validados**: o que está gravado foi escrito por
+  uma versão anterior do aplicativo, e um `month` ausente iria direto para a
+  query da API, que responderia 400 na primeira abertura depois da atualização.
+- **A command palette é só Web**, e seus comandos saem da mesma lista da
+  navegação lateral, já filtrada por perfil — uma lista paralela divergiria na
+  primeira rota nova e ofereceria um destino que a API recusa.
+
+### Um vazamento de teste no frontend, também encontrado nesta fase
+
+O Jest passou a não encerrar sozinho ("Jest did not exit one second after the
+test run"). Reproduzido em 20 linhas: **qualquer** mutação do TanStack Query
+deixa um `setTimeout` de coleta agendado (`gcTime` padrão de 5 minutos) que o
+`queryClient.clear()` não cancela. `--detectOpenHandles` não aponta nada, o que
+torna o sintoma fácil de atribuir ao arquivo errado.
+
+Resolvido com `mutations: { gcTime: 0 }` no cliente de teste — e **não** nas
+queries, onde o mesmo valor coletaria o chamado semeado antes de a mutação ler
+o estado anterior, deixando o rollback sem para onde voltar.
+
+### Validações executadas
+
+| Comando | Resultado |
+|---|---|
+| Backend `npm run typecheck` | ✅ sem erros |
+| Backend `npm run lint` (sem `--fix`) | ✅ sem erros |
+| Backend `npm run build` | ✅ sem erros |
+| Backend `npm test` | ✅ **470 testes** (+18 nesta fase) |
+| Backend `npm run test:e2e` | ✅ **491 testes** (+38 nesta fase), suíte completa executada duas vezes seguidas |
+| `npx prisma migrate status` | ✅ 5 migrations, up to date |
+| Swagger | ✅ **34 rotas** (+1: `/audit`) |
+| Frontend `npm run typecheck` | ✅ sem erros |
+| Frontend `npm run lint` (`--max-warnings 0`) | ✅ sem erros nem avisos |
+| Frontend `npm test` | ✅ **162 testes** em 16 suítes (+39 nesta fase), processo encerra limpo |
+| `npm run build:web` | ✅ 18 rotas estáticas |
+| `npx expo export -p android` | ✅ bundle Hermes gerado |
+
+**Total: 961 testes no backend (470 unitários + 491 de integração) + 162 no
+frontend = 1.123.**
+
+Cobertura nova de segurança: headers do helmet, ausência de `X-Powered-By`,
+`Cross-Origin-Resource-Policy` para o PDF, correlation ID gerado/propagado/
+descartado quando malformado e presente em respostas de erro, 429 no login e na
+recuperação de senha, e 21 ações de auditoria — inclusive a varredura que
+garante que nenhuma senha chegou à trilha.
+
+---
+
+## Subida local (2026-08-15) — dois defeitos que só apareceram ao rodar
+
+A suíte inteira passava (961 no backend, 159 no frontend) e mesmo assim **nem o
+backend nem o frontend subiam**. Os dois defeitos são do tipo que teste nenhum
+das fases anteriores poderia pegar, porque nenhum deles roda o produto como um
+usuário o encontra.
+
+### 1. `nest build` terminava com sucesso e não gerava nada
+
+`npm run start:dev` falhava com `Cannot find module dist/main`, e
+`npm run build` saía com código **0** deixando o `dist` inexistente.
+
+Causa: `nest-cli.json` usa `deleteOutDir: true` e o `tsconfig.json` liga
+`incremental: true`. O `tsconfig.build.tsbuildinfo` ficava na **raiz** do
+projeto, fora do diretório apagado — então o TypeScript apagava a saída, lia o
+estado incremental, concluía "tudo já compilado" e não emitia nenhum arquivo.
+
+É a mesma classe de defeito que a Fase 08 encontrou (`dist/src/main.js`): a
+imagem de produção não sobe, e a falha aparece longe da causa. O
+`npm run build` das validações anteriores relatava sucesso — o que ele relatava
+era verdade, só não significava o que parecia.
+
+Corrigido em `tsconfig.build.json` com
+`"tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"`: o estado passa a viver
+dentro da saída, então apagar uma coisa apaga a outra e as duas nunca discordam.
+Verificado com duas builds seguidas — a segunda era exatamente onde falhava.
+
+### 2. Tela branca no Web em toda abertura
+
+O `app/_layout.tsx` devolvia o splash (durante o carregamento da sessão) ou um
+`<Redirect>` **no lugar** do `<Slot />`. O expo-router exige que o layout raiz
+monte um navegador já no primeiro render; sem isso o redirecionamento dispara
+antes de existir navegador:
+
+```
+Attempted to navigate before mounting the Root Layout component.
+```
+
+O resultado era tela branca — em **toda** abertura da aplicação Web, não num
+caso de borda.
+
+Por que nada pegou: `resolveRedirect` é função pura, continuava correta e tem 9
+testes; e o `npm run build:web` renderiza cada rota **isoladamente**, sem passar
+pelo gate — por isso as 18 rotas eram exportadas com sucesso enquanto a
+aplicação real não abria.
+
+Corrigido renderizando o `<Slot />` sempre, com o splash como sobreposição
+absoluta e o `<Redirect>` como irmão. Efeito colateral bem-vindo: a tela de
+login não pisca mais antes de a sessão ser lida do disco.
+
+`src/navigation/root-layout.test.tsx` trava a regressão olhando para a
+**estrutura renderizada**, não para o destino do redirecionamento. Confirmado
+que o teste pega o defeito: restaurando a versão anterior do arquivo, 2 dos 3
+casos falham.
+
+Detalhe que custou uma terceira quebra: a primeira versão do teste ficou em
+`app/`, e **todo** arquivo naquele diretório é uma rota para o expo-router. Um
+`.test.tsx` ali vira rota sem componente padrão e o servidor de desenvolvimento
+passa a responder 500 — pego porque a aplicação continuava aberta no navegador
+enquanto o teste era escrito. Testes que importam telas moram em `src/`.
+
+### Verificado com a aplicação no ar
+
+| Verificação | Resultado |
+|---|---|
+| `GET /health` e `/health/ready` | `{"status":"ok"}` / `{"database":"up"}` |
+| Login real via HTTP | token emitido |
+| Headers do helmet na resposta | `X-Content-Type-Options`, `Cross-Origin-Resource-Policy: cross-origin`, sem `X-Powered-By` |
+| `x-request-id` enviado pelo cliente | ecoado na resposta **e** gravado na trilha de auditoria da mesma requisição |
+| Rate limiting | 9 × 401 e depois 429, com `Retry-After: 60` |
+| Log de acesso | uma linha por requisição, com status e duração (`POST /api/v1/auth/login 429 0.3ms`) |
+| `GET /audit` com token de superuser | trilha devolvida, com o correlation ID do login |
+| Frontend Web | carrega e redireciona anônimo para `/login`, sem erro no console |
+
+Ainda **não** verificado na interface: os fluxos autenticados (painel,
+chamados, relatórios, administração). O login pela tela precisa ser feito por
+uma pessoa — não digito senha em formulário. Os mesmos fluxos têm cobertura de
+integração no backend e de unidade no frontend.
+
+---
+
+## Fase 12 — migração de dados (parcial: local concluída, cutover pendente) 🟡
+
+Executada em 2026-08-15. A base de produção foi copiada **na íntegra** para o
+ambiente local e validada contra o schema novo. O cutover **não** foi feito e
+depende de decisões registradas em **`docs/CUTOVER.md`**.
+
+### O achado que veio antes da migração
+
+`prisma/seed.ts` e `test/setup-e2e.ts` tinham uma lista de bloqueio com
+`farmacosprecodecusto.com.br`. O host real de produção, lido do `.env` do Flask,
+é `api.farmac**ias**precodecusto.com.br`.
+
+A trava **nunca bloqueou nada**. Apontar `DATABASE_URL` para produção e rodar
+`npm run prisma:seed` gravaria usuários lá; rodar a suíte de integração
+executaria `truncateAll`, que **apaga todas as tabelas**. Onze fases conviveram
+com uma proteção que não protegia — e ela dava a sensação de segurança que
+levaria alguém a rodar o comando sem pensar duas vezes.
+
+Substituída por **lista de permissão** em
+`src/common/safety/disposable-database.ts`: o que ela não conhece, ela recusa.
+Os hosts de produção conhecidos viraram recusa inegociável — a variável de
+escape (`ALLOW_NON_LOCAL_DATABASE`) não os libera. 10 testes travam o
+comportamento, começando pelo caso exato que passava antes.
+
+### O que foi executado
+
+| Etapa | Resultado |
+|---|---|
+| Inventário da produção | 6 usuários, 5 módulos, 5 parâmetros, 5 pagamentos, 63 chamados, 109 atividades (8 MB) |
+| Backup completo (`pg_dump` custom + SQL) | `backups/`, com verificação do marcador de conclusão |
+| Restauração em cópia local (`hopedesk_legacy`) | 193 linhas, contagens idênticas |
+| Dry-run | 193/193, 0 ignoradas, 0 órfãos |
+| Migração para o schema novo | 193/193 |
+| Checksums de conteúdo por tabela | conferem nas 6 |
+| Soma de dinheiro e horas | 28.985,81 / 143,43h nas duas pontas |
+| Sequências | à frente do maior id |
+| Smoke dos cálculos sobre dado real | banco de horas, resumo mensal e analytics sem erro |
+| Paridade com o Flask no dado real | **todos os números iguais** |
+
+A única etapa que tocou a produção foi o `pg_dump`, que **lê e não escreve**.
+
+### Paridade sobre o dado real
+
+Os casos dourados da Fase 06 provaram o motor em 34 cenários construídos. Isto é
+a mesma comparação com o que existe de verdade:
+
+| | Flask (código real) | API nova |
+|---|---|---|
+| ciclo | 13/03/2026 a 13/09/2026 | 13/03/2026 a 13/09/2026 |
+| franquia | 16.0 | 16 |
+| consumido no ciclo | 141.97 | 141.97 |
+| horas pagas | 143.43 | 143.43 |
+| saldo acumulado | 0 | 0 |
+
+`scripts/migration/parity_real_data.py` executa o `calculate_accumulated_hours`
+do `app.py` — código legado autêntico, com a camada de consulta substituída por
+listas, mesma técnica dos casos dourados.
+
+### Decisões de projeto
+
+- **Dry-run que grava e desfaz.** Sem `--apply`, a migração roda inteira dentro
+  de uma transação que termina em ROLLBACK. Uma simulação que não exercita a
+  escrita não prova nada sobre constraints — e as constraints do destino são
+  justamente o que o legado não tinha.
+- **Transação única.** Ou entram as 193 linhas, ou não entra nenhuma.
+- **Módulo com nome equivalente em caixa diferente aborta a migração.** O
+  destino tem índice único em `lower(name)` e o legado não tinha. Fundir dois
+  módulos muda dado; a decisão é humana.
+- **Órfãos são pulados e relatados**, nunca inseridos nem ignorados em silêncio.
+  Não havia nenhum.
+- **IDs preservados com os buracos.** Os pagamentos 1, 2 e 5 não existem na
+  produção e continuam não existindo — é o que permite conferir por ID contra o
+  sistema antigo.
+- **Hora de parede preservada byte a byte.** `started_at`/`ended_at` não passam
+  por conversão nenhuma: reescrever deslocaria 109 atividades em 3 horas.
+- **A cópia crua do legado é mantida** (`hopedesk_legacy`), com o schema do
+  Flask. É a origem para repetir a migração sem tocar a produção de novo, e a
+  referência da validação.
+
+### O que bloqueia o cutover
+
+Detalhado em `docs/CUTOVER.md` §6. Em resumo:
+
+1. 🔴 **O hash de senha é porta de mão única.** A API regrava em bcrypt no
+   primeiro login e o Werkzeug não lê bcrypt: quem entrar na API nova não entra
+   mais no Flask. Os 6 usuários de produção ainda estão todos em
+   `scrypt:32768:8:1`. Três opções na §6.1 — sem escolha, não há cutover.
+2. 🔴 **Base única exige `ALTER TABLE`** (`numeric`, `is_superuser NOT NULL`,
+   tabelas novas, índice funcional). Alteração de schema em produção precisa de
+   aprovação explícita.
+3. 🟡 Retenção da trilha de auditoria (dado pessoal sem política de expurgo).
+4. 🟡 SMTP desligado por padrão.
+
+### Validações executadas
+
+| Comando | Resultado |
+|---|---|
+| `dump-legacy.sh` | ✅ dump custom + SQL, marcador de conclusão conferido |
+| `restore-legacy-local.sh` | ✅ 193 linhas na cópia |
+| `migrate.ts` (dry-run) | ✅ 193/193, desfeito |
+| `migrate.ts --apply` | ✅ 193/193 |
+| `validate.ts` | ✅ checksums, dinheiro, órfãos e sequências |
+| `smoke-real-data.ts` | ✅ cálculos sobre dado real |
+| `parity_real_data.py` | ✅ paridade com o Flask |
+| Backend `typecheck`, `lint`, `build` | ✅ |
+| Backend `npm test` | ✅ **480 testes** (+10 da trava) |
+| Backend `npm run test:e2e` | ✅ **491 testes** |
+
+**Total: 971 no backend + 162 no frontend = 1.133.**
+
+---
+
 ## Como rodar
 
 ```bash
@@ -1240,6 +1637,61 @@ rede local.
 | 24 | **`"1.500"` em campo de dinheiro/horas é aceito e vira 1,50** — erro de mil vezes. O comportamento vem do `float()` do legado e é preservado por paridade | 🔴 Alto | Bloqueado na borda de entrada por `src/domain/decimal-input.ts`, com teste. **Qualquer cliente novo da API (script, integração) precisa da mesma guarda** — a API não protege |
 | 25 | ~~TypeScript 5.3 não resolve `NoInfer` do TanStack Query v5: todo `useQuery(...).data` era `any`, sem emitir erro~~ | — | ✅ Resolvido na Fase 10 (`typescript@~5.6.3`). Mantenha o TS ≥ 5.4 ao atualizar o Expo |
 | 26 | O painel exibe o KPI de primeira resposta com aviso de que subestima (item 14). Se o cálculo for corrigido um dia, o aviso precisa sair junto | Baixo | Comentário na própria tela, em `app/analytics.tsx` |
+| 27 | **Rate limiting conta em memória.** Com mais de uma instância da API, o limite efetivo vira `limite × instâncias` | Médio | Deliberado (instância única). Escalar horizontalmente exige trocar o storage do `@nestjs/throttler` — é aí que o Redis se justifica |
+| 28 | **Auditoria nunca lança**: falha de gravação vira log de erro e buraco na trilha, não recusa da operação | Informativo | Deliberado; um requisito regulatório inverteria a decisão. `AuditService.record` |
+| 29 | A trilha registra IP e ator de cada ato administrativo. É dado pessoal e **não tem política de retenção** | Médio | `GET /audit` é superuser-only e não há rota de exclusão. Definir expurgo por idade é decisão de negócio da Fase 12 |
+| 30 | Um usuário que fizer login na API nova tem a senha regravada em bcrypt e **deixa de conseguir entrar no Flask** (Werkzeug não lê bcrypt) | 🔴 Alto | Precisa entrar no plano de operação paralela da Fase 12 |
+| 31 | Testes de integração compartilham `process.env` sob `--runInBand`: um spec que altera ambiente afeta os seguintes | Corrigido | `setup-e2e.ts` reescreve os limites antes de cada arquivo. Foi a causa de 38 falhas que dependiam da ordem do sequencer |
+| 32 | Qualquer mutação do TanStack Query em teste deixa um `setTimeout` de coleta pendurado e impede o Jest de encerrar | Corrigido | `mutations: { gcTime: 0 }` no cliente de teste — **não** nas queries, que precisam do cache vivo para o rollback |
+| 33 | Realtime, push com deep link, central de notificações, rascunhos offline e biometria continuam fora | Informativo | Motivo de cada um na tabela da Fase 11. Nenhum é endurecimento; todos exigem serviço novo ou duplicam regra de negócio no cliente |
+| 34 | ~~`nest build` saía com código 0 sem emitir nada (`tsbuildinfo` fora do `dist` apagado)~~ | — | ✅ Resolvido em 2026-08-15: `tsBuildInfoFile` dentro de `dist` |
+| 35 | ~~Tela branca no Web: o layout raiz não montava o `Slot` no primeiro render~~ | — | ✅ Resolvido em 2026-08-15; regressão travada em `app/route-gate-render.test.tsx` |
+| 36 | **Nenhuma validação anterior executava a aplicação.** Build, export e testes passavam com o produto inoperante | Médio | Duas subidas locais já revelaram dois defeitos. Rodar Web e API de verdade deve fazer parte do fechamento de cada fase |
+| 37 | ~~A trava contra rodar seed/testes em produção tinha um marcador que não correspondia ao host real: `prisma:seed` gravaria em produção e a suíte TRUNCARIA as tabelas~~ | — | ✅ Resolvido em 2026-08-15: lista de permissão em `src/common/safety/disposable-database.ts`, com 10 testes |
+| 38 | **Rehash de senha é porta de mão única**: quem logar na API nova não entra mais no Flask (Werkzeug não lê bcrypt) | 🔴 Alto | Bloqueia o cutover. Três opções em `CUTOVER.md` §6.1 — exige decisão |
+| 39 | A base local de desenvolvimento agora contém **dados reais de produção** (e-mails, hashes, chamados) | Médio | Container descartável; `backups/` está no `.gitignore`. Reverter é `prisma migrate reset` + `prisma:seed` |
+| 40 | O dump de `backups/` envelhece a cada chamado aberto em produção | Informativo | Repetir `dump-legacy.sh` imediatamente antes de qualquer cutover |
+
+---
+
+## Fase 13 — publicação na VPS 🟡
+
+Documento operacional: **`docs/DEPLOY.md`**. O deploy **não é o cutover**: sobe
+em endereços e banco próprios, e o Flask segue intocado sobre a base dele.
+
+| Peça | Onde | O que resolve |
+|---|---|---|
+| Imagem da API | `backend/Dockerfile` | cliente Prisma gerado **depois** de o schema existir, e CLI na imagem final — os dois defeitos que faziam o container subir e morrer |
+| Migrations no boot | `backend/docker-entrypoint.sh` | `migrate deploy`; se falhar, o container não sobe — de propósito |
+| Imagem do Web | `frontend/Dockerfile` + `nginx.conf` | export estático do Expo servido por nginx; `EXPO_PUBLIC_API_URL` é ARG porque entra no bundle |
+| Stack | `docker-compose.prod.yml` | convive com a stack `hopecash`: nada publica porta pública, tudo passa pelo nginx-proxy-manager |
+| Deploy | `scripts/deploy/remote-deploy.sh` | idempotente; gera os segredos na própria VPS e **aborta se a API não responder** |
+| CI | `.github/workflows/ci.yml` | typecheck, lint sem `--fix`, build, unit, e2e com Postgres real, export do Web |
+| Action de deploy | `.github/workflows/deploy.yml` | push em `main` ou disparo manual em qualquer branch; espera o CI (`needs: ci`) e confere os endereços públicos |
+| Primeiro superusuário | `backend/src/scripts/create-superuser.ts` | a base sobe **vazia**: sem isto não há login, e sem login não há como criar usuário pela API |
+
+### Decisões registradas
+
+1. **Segredo nenhum da aplicação passa pela Action.** Senha do banco e segredos
+   JWT nascem na VPS com `openssl rand` e ficam só no `.env` de lá, 600. O
+   script preenche apenas o que está **vazio**: trocar um segredo em uso
+   invalidaria todas as sessões ou quebraria a conexão com o banco.
+2. **O deploy publica o branch de onde o disparo partiu** (`github.ref_name`).
+   Permite validar na VPS antes de mexer em `main`.
+3. **A senha do primeiro superusuário é provisória por construção**
+   (`mustChangePassword`): senha digitada em linha de comando fica no histórico
+   do shell e possivelmente no log do deploy.
+4. **`.env.prod.*` entrou no `.gitignore`** (menos o `.example`). O repositório
+   é **público** — um `.env` de teste commitado ali é público junto.
+
+### Pendências desta fase
+
+| # | Pendência |
+|---|---|
+| 41 | Registros DNS e proxy hosts do nginx-proxy-manager (`DEPLOY.md` §4.1 e §4.3) — feitos fora do repositório |
+| 42 | Autenticação SSH da Action por **senha**. Chave dedicada é revogável sozinha e restringível a comando (`DEPLOY.md` §2) |
+| 43 | **Não há backup automático do banco novo.** Enquanto for base de teste não há o que perder; antes do cutover precisa existir |
+| 44 | A suíte de integração não roda nesta máquina sem Docker (precisa de Postgres real); quem a executa de verdade é o CI |
 
 ---
 
@@ -1257,22 +1709,32 @@ Ao concluir cada fase:
 
 ## Próxima fase
 
-**Fase 11 — recursos modernos e endurecimento.** Rate limiting, headers de
-segurança, correlation ID e trilha de auditoria.
+**Fase 12 — migração de dados, operação paralela e cutover.** É a única
+pendente, e a única que toca dados reais.
 
 ### Pontos de partida já mapeados
 
-1. **Rate limiting no login é o mais urgente.** `spendDummyWork` fecha o canal
-   lateral de latência (Fase 02), mas nada limita a taxa de tentativas.
-2. **Auditoria**: existe `src/audit/` no `backend/src`, criado e nunca
-   preenchido — conferir antes de começar do zero.
-3. **Correlation ID** combina com o barramento de eventos em processo
-   (`domain-events.service.ts`): o identificador precisa atravessar o handler
-   assíncrono, não só o request.
-4. **Headers**: o `main.ts` já configura CORS e `ValidationPipe`; falta helmet.
-5. O frontend classifica erros por status (`ApiError`), então uma resposta
-   **429** cai hoje na mensagem genérica — vale um caso próprio quando o rate
-   limiting entrar.
+1. **Nada em produção sem aprovação explícita.** Todo o trabalho da fase é
+   validado em cópia descartável; o cutover é decisão do usuário.
+2. **Três divergências de schema já conhecidas** estão na tabela de riscos e
+   precisam de decisão antes do go/no-go: `amount`/`paid_hours` de
+   `double precision` para `numeric` (item 2), `is_superuser` de nullable para
+   `NOT NULL` (item 3) e preservação de IDs com `setval`
+   (`LEGACY_CONTRACTS.md` §7).
+3. **Duas tabelas novas** (`refresh_token` e `audit_log`) não existem no Flask.
+   Acrescentá-las não afeta a operação paralela — o legado as ignora.
+4. **Hash de senha já é compatível nas duas direções** (Fase 02, 42 vetores
+   reais): o legado continua validando os hashes Werkzeug, e a API regrava em
+   bcrypt no primeiro login. Isso significa que **um usuário que fizer login na
+   API nova não consegue mais entrar no Flask** — o Werkzeug não lê bcrypt. É o
+   ponto mais delicado da operação paralela e precisa entrar no plano.
+5. **`prisma db push` nunca**: o índice funcional `lower(name)` não é
+   representável no schema e seria perdido (item 9 dos riscos).
+6. A base de dev (5433) e a de teste (5434) são containers descartáveis; o
+   `setup-e2e.ts` e o `seed.ts` recusam hosts de produção conhecidos.
+
+### Referência acumulada das fases anteriores
+
 
 ### O que já existe e deve ser reaproveitado
 
@@ -1316,7 +1778,7 @@ Todas essas rotas foram concluídas na Fase 09, incluindo `/forgot-password` e
 
 ### O que já está pronto para consumir
 
-A API cobre todo o domínio, com **33 rotas** documentadas em Swagger
+A API cobre todo o domínio, com **34 rotas** documentadas em Swagger
 (`/api/v1/docs`). O contrato está estável e testado:
 
 | Área | Rotas |
@@ -1331,6 +1793,7 @@ A API cobre todo o domínio, com **33 rotas** documentadas em Swagger
 | banco de horas | saldo do ciclo e resumo mensal |
 | analytics | painel com KPIs, backlog, agregações e tendência |
 | relatórios | atividades e serviços, em JSON e PDF |
+| auditoria | consulta paginada e filtrada da trilha (superuser) |
 
 ### Convenções que o frontend precisa respeitar
 
@@ -1362,12 +1825,11 @@ No frontend elas vivem em `LEGACY_PALETTE` / `colors.palette`, iguais nos dois
 temas. As variantes ajustadas por contraste (`colors.primary` etc.) são outra
 coisa — **não** use uma no lugar da outra ao desenhar gráficos.
 
-### Depois da 08
+### Convenções acrescentadas pela Fase 11
 
-- **Fase 09** — telas de autenticação e chamados;
-- **Fase 10** — analytics, relatórios e administração;
-- **Fase 11** — endurecimento (rate limiting, headers, correlation ID, auditoria);
-- **Fase 12** — migração de dados e cutover. Os pontos já levantados estão na
-  tabela de riscos: `ALTER TABLE` de `numeric` (item 2), coerção de
-  `is_superuser` (item 3) e preservação de IDs com `setval`
-  (`LEGACY_CONTRACTS.md` §7).
+7. **`x-request-id`** vai em toda requisição e volta na resposta. Ao relatar um
+   erro, cite esse valor: é o que liga a tela ao log do servidor e à trilha de
+   auditoria.
+8. **429 não se repete.** O cliente não repete nenhum 4xx, e o `ErrorState`
+   esconde "tentar novamente" no limite de taxa — repetir conta contra o mesmo
+   limite que ainda não expirou.
