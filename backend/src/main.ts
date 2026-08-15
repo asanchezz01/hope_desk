@@ -1,9 +1,11 @@
 import 'reflect-metadata';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { applyGlobalSetup } from './app-setup';
+import { StructuredLogger } from './common/observability/structured-logger';
 import { APP_CONFIG_NAMESPACE, AppConfig } from './config/configuration';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -15,20 +17,18 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
   const config = configService.getOrThrow<AppConfig>(APP_CONFIG_NAMESPACE);
 
-  app.setGlobalPrefix(config.apiPrefix);
+  // JSON só em produção: no terminal do desenvolvedor ele atrapalha mais do que
+  // ajuda, e o coletor de logs não está lá para consumi-lo.
+  app.useLogger(new StructuredLogger(config.nodeEnv === 'production'));
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: false },
-    }),
-  );
-
-  app.enableCors({
-    origin: config.corsOrigins.length > 0 ? config.corsOrigins : false,
-    credentials: true,
+  // Prefixo, ValidationPipe, helmet e CORS ficam num ponto só, compartilhado
+  // com o harness de testes.
+  applyGlobalSetup(app, {
+    apiPrefix: config.apiPrefix,
+    corsOrigins: config.corsOrigins,
+    // Só fora de produção: em desenvolvimento a mesma aplicação é aberta por
+    // localhost, por 127.0.0.1, pelo emulador (10.0.2.2) e pelo IP da máquina.
+    allowLocalNetworkOrigins: config.nodeEnv !== 'production',
   });
 
   const swaggerConfig = new DocumentBuilder()

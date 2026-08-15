@@ -11,6 +11,24 @@ import { resolveRedirect } from '../src/navigation/route-gate'
 import { QueryProvider } from '../src/providers/QueryProvider'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 
+/**
+ * Gate de navegação.
+ *
+ * O `<Slot />` é renderizado SEMPRE, mesmo enquanto a sessão está sendo lida e
+ * mesmo quando há redirecionamento pendente. Não é detalhe de estilo: o
+ * expo-router exige que o layout raiz monte um navegador já no primeiro render.
+ * Devolver o splash — ou um `<Redirect>` — *no lugar* do `Slot` faz o
+ * `<Redirect>` tentar navegar antes de existir navegador, e o resultado é
+ *
+ *     Attempted to navigate before mounting the Root Layout component
+ *
+ * com **tela branca** no Web. O `expo export` não pegava isso porque a
+ * renderização estática monta cada rota isoladamente, sem passar pelo gate.
+ *
+ * Por isso o splash virou sobreposição: ele cobre o que o `Slot` renderizou
+ * embaixo, em vez de substituí-lo — o que também evita o piscar da tela de
+ * login antes de a sessão do disco ser lida.
+ */
 function RouteGate() {
   const { isLoading, user, mustChangePassword } = useAuth()
   const segments = useSegments()
@@ -18,22 +36,29 @@ function RouteGate() {
 
   // Enquanto a sessão não foi lida do disco, redirecionar chutaria: um usuário
   // logado veria a tela de login piscar antes de voltar para dentro.
-  if (isLoading) {
-    return (
-      <View style={[styles.splash, { backgroundColor: theme.background }]}>
-        <ActivityIndicator accessibilityLabel="Carregando" color={theme.primary} size="large" />
-      </View>
-    )
-  }
+  const redirect = isLoading
+    ? null
+    : resolveRedirect({
+        isAuthenticated: user !== null,
+        mustChangePassword,
+        segment: segments[0],
+      })
 
-  const redirect = resolveRedirect({
-    isAuthenticated: user !== null,
-    mustChangePassword,
-    segment: segments[0],
-  })
+  return (
+    <View style={styles.root}>
+      <Slot />
 
-  if (redirect) return <Redirect href={redirect as never} />
-  return <Slot />
+      {isLoading && (
+        <View
+          style={[StyleSheet.absoluteFill, styles.splash, { backgroundColor: theme.background }]}
+        >
+          <ActivityIndicator accessibilityLabel="Carregando" color={theme.primary} size="large" />
+        </View>
+      )}
+
+      {redirect && <Redirect href={redirect as never} />}
+    </View>
+  )
 }
 
 export default function RootLayout() {
@@ -56,5 +81,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1 },
+  splash: { alignItems: 'center', justifyContent: 'center' },
 })

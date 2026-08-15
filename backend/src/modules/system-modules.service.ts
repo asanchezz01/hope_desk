@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateSystemModuleDto,
@@ -20,7 +22,10 @@ const MODULE_SELECT = {
 
 @Injectable()
 export class SystemModulesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(
     query: ListSystemModulesQueryDto,
@@ -77,14 +82,26 @@ export class SystemModulesService {
   async create(dto: CreateSystemModuleDto): Promise<SystemModuleResponse> {
     await this.assertNameAvailable(dto.name);
 
+    let created: SystemModuleResponse;
     try {
-      return await this.prisma.systemModule.create({
+      created = await this.prisma.systemModule.create({
         data: { name: dto.name, isActive: dto.isActive ?? true },
         select: MODULE_SELECT,
       });
     } catch (error) {
       throw this.translateUniqueViolation(error);
     }
+
+    // O par de `toggle` e `delete` já estava na trilha; sem a criação, ela
+    // registraria o fim da vida de um módulo mas não o começo.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.MODULE_CREATED,
+      entityType: 'system_module',
+      entityId: created.id,
+      metadata: { name: created.name, isActive: created.isActive },
+    });
+
+    return created;
   }
 
   async update(id: number, dto: UpdateSystemModuleDto): Promise<SystemModuleResponse> {
@@ -101,8 +118,9 @@ export class SystemModulesService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
+    let updated: SystemModuleResponse;
     try {
-      return await this.prisma.systemModule.update({
+      updated = await this.prisma.systemModule.update({
         where: { id },
         data,
         select: MODULE_SELECT,
@@ -110,6 +128,22 @@ export class SystemModulesService {
     } catch (error) {
       throw this.translateUniqueViolation(error);
     }
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.MODULE_UPDATED,
+      entityType: 'system_module',
+      entityId: id,
+      metadata: {
+        // Renomear um módulo muda o que aparece no histórico de todo chamado
+        // ligado a ele — daí guardar o nome anterior, e não só o novo.
+        fromName: existing.name,
+        toName: updated.name,
+        fromActive: existing.isActive,
+        toActive: updated.isActive,
+      },
+    });
+
+    return updated;
   }
 
   /** `toggle_system_module` do legado: inverte a situação atual. */
@@ -119,11 +153,22 @@ export class SystemModulesService {
       throw new NotFoundException('Módulo não encontrado.');
     }
 
-    return this.prisma.systemModule.update({
+    const updated = await this.prisma.systemModule.update({
       where: { id },
       data: { isActive: !existing.isActive },
       select: MODULE_SELECT,
     });
+
+    // Desativar um modulo tira a opcao de abrir chamado nele -- muda o que a
+    // operacao consegue fazer, entao entra na trilha.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.MODULE_TOGGLED,
+      entityType: 'system_module',
+      entityId: id,
+      metadata: { name: existing.name, isActive: updated.isActive },
+    });
+
+    return updated;
   }
 
   /**
@@ -148,6 +193,13 @@ export class SystemModulesService {
     }
 
     await this.prisma.systemModule.delete({ where: { id } });
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.MODULE_DELETED,
+      entityType: 'system_module',
+      entityId: id,
+      metadata: { name: existing.name },
+    });
   }
 
   /**

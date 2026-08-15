@@ -60,14 +60,63 @@ export interface DecimalValue {
 /** Status HTTP sintético para "não foi possível chegar ao servidor". */
 export const OFFLINE_STATUS = 0
 
+/**
+ * Cabeçalho de correlação (Fase 11). Mesmo nome que a API aceita na entrada e
+ * devolve na resposta — ela valida o formato antes de deixar o valor entrar em
+ * qualquer log, então um ID malformado é substituído por um gerado no servidor.
+ */
+export const CORRELATION_ID_HEADER = 'x-request-id'
+
+let correlationCounter = 0
+
+/**
+ * Identificador de rastreio da requisição.
+ *
+ * Não é segredo nem precisa ser criptograficamente aleatório: serve para achar,
+ * no log do servidor, a requisição que produziu o erro que a pessoa está vendo
+ * na tela. Por isso `Math.random` basta — e evita depender de `crypto.randomUUID`,
+ * que não existe em todo runtime do Hermes.
+ *
+ * O formato respeita `^[A-Za-z0-9._-]{8,128}$`, que é o que a API aceita; sair
+ * disso faria o servidor descartar o valor em silêncio e gerar outro, quebrando
+ * a ligação com o que o cliente registrou.
+ */
+export function createCorrelationId(): string {
+  correlationCounter = (correlationCounter + 1) % 1_000_000
+  const random = Math.random().toString(36).slice(2, 10)
+  return `web-${Date.now().toString(36)}-${correlationCounter.toString(36)}-${random}`
+}
+
+interface ApiErrorContext {
+  /** ID de rastreio desta requisição, para citar em chamado de suporte. */
+  correlationId?: string
+  /** Segundos até a próxima tentativa ser aceita, quando o servidor informa. */
+  retryAfterSeconds?: number
+}
+
 export class ApiError extends Error {
+  readonly correlationId?: string
+  readonly retryAfterSeconds?: number
+
   constructor(
     message: string,
     readonly status: number,
-    readonly details?: unknown
+    readonly details?: unknown,
+    context: ApiErrorContext = {}
   ) {
     super(message)
     this.name = 'ApiError'
+    this.correlationId = context.correlationId
+    this.retryAfterSeconds = context.retryAfterSeconds
+  }
+
+  /**
+   * Limite de taxa (Fase 11). Merece tratamento próprio: repetir a chamada
+   * agora só afunda mais o limite, então a UI precisa pedir espera em vez de
+   * oferecer "tentar de novo".
+   */
+  get isRateLimited(): boolean {
+    return this.status === 429
   }
 
   /** Sem rede, DNS falhou, servidor fora do ar. */
@@ -163,6 +212,10 @@ async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
+  // Um ID por requisição HTTP: a repetição depois do refresh é outra chamada no
+  // log do servidor, e fingir que é a mesma atrapalharia o rastreio.
+  const correlationId = createCorrelationId()
+  headers.set(CORRELATION_ID_HEADER, correlationId)
 
   let response: Response
   try {
@@ -170,7 +223,9 @@ async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(
       'Não foi possível conectar ao servidor. Verifique sua conexão.',
-      OFFLINE_STATUS
+      OFFLINE_STATUS,
+      undefined,
+      { correlationId }
     )
   }
 
@@ -180,13 +235,45 @@ async function rawRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body = isJson ? await response.json().catch(() => null) : null
 
   if (!response.ok) {
-    throw new ApiError(messageFrom(body, response.status), response.status, body)
+    throw errorFrom(body, response, correlationId)
   }
 
   return body as T
 }
 
-function messageFrom(body: unknown, status: number): string {
+/** Monta o `ApiError` com o que a resposta carrega além do corpo. */
+function errorFrom(body: unknown, response: Response, sentCorrelationId: string): ApiError {
+  const retryAfterSeconds = retryAfterFrom(response.headers.get('retry-after'))
+  return new ApiError(
+    messageFrom(body, response.status, retryAfterSeconds),
+    response.status,
+    body,
+    {
+      // O ID devolvido pelo servidor tem precedência: se o enviado foi recusado
+      // por formato, é o do servidor que está no log.
+      correlationId: response.headers.get(CORRELATION_ID_HEADER) ?? sentCorrelationId,
+      retryAfterSeconds,
+    }
+  )
+}
+
+function retryAfterFrom(header: string | null): number | undefined {
+  if (!header) return undefined
+  const seconds = Number(header)
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+}
+
+function messageFrom(body: unknown, status: number, retryAfterSeconds?: number): string {
+  // O 429 vem do ThrottlerGuard com a mensagem genérica do NestJS
+  // ("ThrottlerException: Too Many Requests"), que não diz nada a quem está
+  // olhando a tela — e é o único caso em que a mensagem da API é pior que uma
+  // escrita aqui.
+  if (status === 429) {
+    return retryAfterSeconds
+      ? `Muitas tentativas em pouco tempo. Aguarde ${retryAfterSeconds} segundos e tente de novo.`
+      : 'Muitas tentativas em pouco tempo. Aguarde um instante e tente de novo.'
+  }
+
   const message = (body as { message?: unknown } | null)?.message
   if (Array.isArray(message)) return message.filter((item) => typeof item === 'string').join(' ')
   if (typeof message === 'string' && message.length > 0) return message
@@ -257,15 +344,21 @@ export async function requestBlob(
   const payload: BodyInit | undefined =
     rawBody ?? (body === undefined ? undefined : JSON.stringify(body))
 
+  let correlationId = createCorrelationId()
+
   async function attempt(session: StoredSession | null): Promise<Response> {
     const headers = withAuth(init.headers, anonymous ? null : session)
     headers.set('Accept', 'application/pdf')
+    correlationId = createCorrelationId()
+    headers.set(CORRELATION_ID_HEADER, correlationId)
     try {
       return await fetch(`${API_URL}${path}`, { ...init, body: payload, headers })
     } catch {
       throw new ApiError(
         'Não foi possível conectar ao servidor. Verifique sua conexão.',
-        OFFLINE_STATUS
+        OFFLINE_STATUS,
+        undefined,
+        { correlationId }
       )
     }
   }
@@ -291,7 +384,7 @@ export async function requestBlob(
     } catch {
       parsed = null
     }
-    throw new ApiError(messageFrom(parsed, response.status), response.status, parsed)
+    throw errorFrom(parsed, response, correlationId)
   }
 
   return {

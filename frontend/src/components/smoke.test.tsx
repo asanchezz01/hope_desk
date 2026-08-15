@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native'
 import React from 'react'
 import { Animated, Text } from 'react-native'
 
+import { ApiError, OFFLINE_STATUS } from '../api/client'
 import { ThemeProvider, type ThemeMode } from '../theme/ThemeContext'
 import { useReducedMotion } from '../theme/useReducedMotion'
 
@@ -10,6 +11,7 @@ import Card from './Card'
 import ConfirmationDialog from './ConfirmationDialog'
 import EmptyState from './EmptyState'
 import ErrorBoundary from './ErrorBoundary'
+import ErrorState from './ErrorState'
 import Input from './Input'
 import Skeleton from './Skeleton'
 import StatusBadge from './StatusBadge'
@@ -271,5 +273,33 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     )
     expect(screen.getByText('conteúdo')).toBeTruthy()
+  })
+})
+
+describe('ErrorState', () => {
+  it('trata falta de conexão como causa própria', () => {
+    renderWithTheme(<ErrorState error={new ApiError('irrelevante', OFFLINE_STATUS)} />)
+
+    expect(screen.getByText('Sem conexão')).toBeTruthy()
+  })
+
+  it('esconde "tentar novamente" no limite de taxa', () => {
+    // Repetir agora conta contra o mesmo limite que ainda não expirou: o botão
+    // convidaria a pessoa a prolongar o próprio bloqueio.
+    const onRetry = jest.fn()
+    renderWithTheme(
+      <ErrorState error={new ApiError('Muitas tentativas.', 429)} onRetry={onRetry} />
+    )
+
+    expect(screen.getByText('Muitas tentativas')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull()
+  })
+
+  it('mantém "tentar novamente" para falha comum do servidor', () => {
+    const onRetry = jest.fn()
+    renderWithTheme(<ErrorState error={new ApiError('Erro interno', 500)} onRetry={onRetry} />)
+
+    fireEvent.press(screen.getByRole('button', { name: 'Tentar novamente' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 })

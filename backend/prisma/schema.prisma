@@ -45,6 +45,7 @@ model User {
   assignedTickets Ticket[]       @relation("TicketTechnician")
   activities      Activity[]     @relation("ActivityCreatedBy")
   refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]
 
   @@index([role])
   @@index([resetTokenHash])
@@ -163,4 +164,39 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_token")
+}
+
+/// Trilha de auditoria (Fase 11).
+///
+/// Tabela NOVA, como `refresh_token`: o Flask não a conhece, então acrescentá-la
+/// não afeta a operação paralela.
+///
+/// `actorId` é opcional e a relação usa `onDelete: SetNull` de propósito — o
+/// registro precisa sobreviver à exclusão do usuário que praticou o ato, senão a
+/// trilha some justamente no caso em que ela mais importa. `actorEmail` guarda
+/// uma cópia do identificador no momento do fato, pelo mesmo motivo.
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  /// Ação em `dominio.verbo`, ex.: `user.deleted`, `auth.login_failed`.
+  action        String   @db.VarChar(64)
+  /// Domínio afetado: `user`, `ticket`, `payment`, `system_module`…
+  entityType    String?  @map("entity_type") @db.VarChar(32)
+  entityId      Int?     @map("entity_id")
+  actorId       Int?     @map("actor_id")
+  /// Cópia histórica: sobrevive à exclusão do ator.
+  actorEmail    String?  @map("actor_email") @db.VarChar(120)
+  /// Correlation ID da requisição que originou o registro.
+  correlationId String?  @map("correlation_id") @db.VarChar(128)
+  ipAddress     String?  @map("ip_address") @db.VarChar(64)
+  /// Detalhes não sensíveis. NUNCA senha, hash ou token.
+  metadata      Json?
+  createdAt     DateTime @default(dbgenerated("(now() AT TIME ZONE 'utc'::text)")) @map("created_at") @db.Timestamp(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([action, createdAt])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
 }

@@ -8,24 +8,16 @@
 import { PrismaClient } from '@prisma/client';
 import { SYSTEM_PARAMETER_DEFAULTS } from '../src/common/domain/legacy-enums';
 import { PasswordService } from '../src/auth/password/password.service';
-
-const PRODUCTION_HOST_MARKERS = ['farmacosprecodecusto.com.br', '10.1.4.82'];
+import { assertDisposableDatabase } from '../src/common/safety/disposable-database';
 
 /** Senha padrão apenas para desenvolvimento local. */
 const DEV_DEFAULT_PASSWORD = 'Hope@2026';
 
-function assertDisposableDatabase(): void {
-  const url = process.env.DATABASE_URL ?? '';
-  if (!url) {
-    throw new Error('DATABASE_URL não definida.');
-  }
-  for (const marker of PRODUCTION_HOST_MARKERS) {
-    if (url.includes(marker)) {
-      throw new Error(
-        `Recusando semear: DATABASE_URL aponta para host de produção (${marker}).`,
-      );
-    }
-  }
+// A trava mora em `src/common/safety` e é lista de PERMISSÃO. A versão
+// anterior, local e por bloqueio, tinha um marcador que não correspondia ao
+// host real de produção — ou seja, nunca bloqueou nada.
+function assertSeedTarget(): void {
+  assertDisposableDatabase(process.env.DATABASE_URL, 'semear');
 }
 
 function resolveSeedPassword(): string {
@@ -42,7 +34,7 @@ function resolveSeedPassword(): string {
 }
 
 async function main(): Promise<void> {
-  assertDisposableDatabase();
+  assertSeedTarget();
 
   const password = resolveSeedPassword();
   const prisma = new PrismaClient();

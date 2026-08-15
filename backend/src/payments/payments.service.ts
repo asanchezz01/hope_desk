@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { parseDecimalInput, toDecimalView } from '../common/money/decimal.util';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreatePaymentDto,
@@ -31,7 +33,10 @@ interface PaymentRecordRow {
  */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(query: ListPaymentsQueryDto): Promise<PaginatedPaymentsResponse> {
     const page = Math.max(query.page ?? 1, 1);
@@ -100,6 +105,20 @@ export class PaymentsService {
       data: { paidAt, amount, paidHours },
     });
 
+    // Valores gravados como Decimal exato, não como veio no DTO: é o que o
+    // banco tem, e a diferenca entre os dois seria justamente o bug de "1.500".
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PAYMENT_CREATED,
+      entityType: 'payment',
+      entityId: payment.id,
+      metadata: {
+        paidAt: formatIsoDate(payment.paidAt),
+        amount: payment.amount.toString(),
+        paidHours: payment.paidHours.toString(),
+        rawAmountInput: dto.amount,
+      },
+    });
+
     return toPaymentResponse(payment);
   }
 
@@ -114,6 +133,17 @@ export class PaymentsService {
       throw new NotFoundException('Pagamento não encontrado.');
     }
     await this.prisma.paymentRecord.delete({ where: { id } });
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PAYMENT_DELETED,
+      entityType: 'payment',
+      entityId: id,
+      metadata: {
+        paidAt: formatIsoDate(existing.paidAt),
+        amount: existing.amount.toString(),
+        paidHours: existing.paidHours.toString(),
+      },
+    });
   }
 }
 

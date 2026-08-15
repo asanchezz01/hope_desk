@@ -7,6 +7,11 @@ import {
   Logger,
   Post,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import {
+  AUTH_THROTTLE,
+  PASSWORD_RESET_THROTTLE,
+} from '../common/observability/throttler.config';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   AllowPasswordChangePending,
@@ -40,6 +45,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Autentica e emite o par de tokens' })
@@ -49,6 +55,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -111,6 +118,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(PASSWORD_RESET_THROTTLE)
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -145,6 +153,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(PASSWORD_RESET_THROTTLE)
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Redefine a senha com o token recebido por e-mail' })

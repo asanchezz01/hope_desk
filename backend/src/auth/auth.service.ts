@@ -4,7 +4,11 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
+import { APP_CONFIG_NAMESPACE, AppConfig } from '../config/configuration';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '../common/domain/legacy-enums';
 import { AuthenticatedUser } from './auth.types';
@@ -46,7 +50,13 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
-  ) {}
+    private readonly audit: AuditService,
+    configService: ConfigService,
+  ) {
+    this.config = configService.getOrThrow<AppConfig>(APP_CONFIG_NAMESPACE);
+  }
+
+  private readonly config: AppConfig;
 
   // -------------------------------------------------------------------------
   // Login
@@ -60,6 +70,16 @@ export class AuthService {
     if (!user) {
       // Gasta trabalho equivalente para não vazar existência da conta por latência.
       await this.passwordService.spendDummyWork();
+      // O e-mail tentado é registrado; a RESPOSTA continua idêntica à de senha
+      // errada. A trilha é interna e é o que permite detectar varredura de
+      // contas — o cuidado de não vazar existência é com o cliente, não com o
+      // log.
+      await this.audit.record({
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        actorId: null,
+        actorEmail: dto.email,
+        metadata: { reason: 'unknown_email' },
+      });
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
@@ -69,15 +89,40 @@ export class AuthService {
     );
 
     if (!valid) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
+        actorId: null,
+        actorEmail: user.email,
+        metadata: { reason: 'wrong_password' },
+      });
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
     // Rehash transparente do hash legado do Werkzeug no primeiro login válido.
-    if (needsRehash) {
+    //
+    // Desligável de propósito: enquanto o Flask estiver no ar sobre a mesma
+    // base, regravar em bcrypt tranca o usuário fora do sistema antigo — o
+    // Werkzeug não lê bcrypt, e não há volta sem redefinir a senha. Durante a
+    // operação paralela isso precisa ficar desligado (`docs/CUTOVER.md` §6.1).
+    const rehashed = needsRehash && this.config.passwordRehashEnabled;
+    if (rehashed) {
       await this.rehashPassword(user.id, dto.password);
     }
 
     const tokens = await this.tokenService.issueTokens(user);
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.LOGIN_SUCCEEDED,
+      entityType: 'user',
+      entityId: user.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      // Registra o que de fato aconteceu, não o que seria feito: com o rehash
+      // desligado, `needsRehash` continua verdadeiro e a trilha mentiria.
+      metadata: { rehashed, rehashPending: needsRehash && !rehashed },
+    });
 
     return {
       ...tokens,
@@ -116,7 +161,20 @@ export class AuthService {
   }
 
   async logoutAll(userId: number): Promise<number> {
-    return this.tokenService.revokeAllForUser(userId);
+    const revoked = await this.tokenService.revokeAllForUser(userId);
+
+    // Encerrar todas as sessões é o que alguém faz ao suspeitar de acesso
+    // indevido — e também o que um invasor faz para expulsar o dono da conta.
+    // A trilha guarda quantas sessões caíram, que é o que diferencia "eu tinha
+    // duas sessões" de "havia seis".
+    await this.audit.record({
+      action: AUDIT_ACTIONS.LOGOUT_ALL,
+      entityType: 'user',
+      entityId: userId,
+      metadata: { revokedSessions: revoked },
+    });
+
+    return revoked;
   }
 
   async currentUser(user: AuthenticatedUser): Promise<AuthUserResponse> {
@@ -167,6 +225,14 @@ export class AuthService {
 
     // Troca de senha encerra todas as outras sessões.
     await this.tokenService.revokeAllForUser(user.id);
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PASSWORD_CHANGED,
+      entityType: 'user',
+      entityId: user.id,
+      actorId: user.id,
+      actorEmail: stored.email,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -195,6 +261,18 @@ export class AuthService {
         resetTokenHash: hashResetToken(token),
         resetTokenExpiresAt: expiresAt,
       },
+    });
+
+    // Registrado apenas quando a conta existe. A RESPOSTA continua idêntica nos
+    // dois casos (é a regra do legado contra enumeração de e-mail): a diferença
+    // fica na trilha, que só quem já é superuser consegue ler.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED,
+      entityType: 'user',
+      entityId: user.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      metadata: { expiresAt: expiresAt.toISOString() },
     });
 
     return { token, userId: user.id, email: user.email, name: user.name, expiresAt };
@@ -241,6 +319,17 @@ export class AuthService {
 
     // Redefinir senha encerra todas as sessões existentes.
     await this.tokenService.revokeAllForUser(candidate.id);
+
+    // Fecha o par com `PASSWORD_RESET_REQUESTED`: pedido sem conclusão é
+    // rotina (a pessoa desistiu), mas uma conclusão sem pedido correspondente
+    // significaria que o token chegou por outro caminho.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PASSWORD_RESET_COMPLETED,
+      entityType: 'user',
+      entityId: candidate.id,
+      actorId: candidate.id,
+      actorEmail: candidate.email,
+    });
   }
 
   /** `validate_new_password` do legado: tamanho (nos DTOs) e confirmação. */

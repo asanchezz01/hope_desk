@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { setRequestUser } from '../../common/observability/request-context';
 import {
   ALLOW_PASSWORD_CHANGE_PENDING_KEY,
   IS_PUBLIC_KEY,
@@ -41,6 +42,12 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const user = await this.tokenService.verifyAccessToken(token);
+
+    // A identidade só é conhecida aqui — o middleware de correlation ID roda
+    // antes dos guards. Anexá-la ao contexto faz todo log e todo registro de
+    // auditoria emitido daqui em diante saber de quem foi a ação, sem precisar
+    // receber o usuário por parâmetro.
+    setRequestUser(user.id);
 
     if (user.mustChangePassword) {
       const allowed = this.reflector.getAllAndOverride<boolean>(

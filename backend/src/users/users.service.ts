@@ -9,6 +9,8 @@ import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { PasswordService } from '../auth/password/password.service';
 import { TokenService } from '../auth/token.service';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateUserDto,
@@ -37,6 +39,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
     private readonly tokenService: TokenService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(query: ListUsersQueryDto): Promise<PaginatedUsersResponse> {
@@ -97,8 +100,9 @@ export class UsersService {
 
     const passwordHash = await this.passwordService.hash(dto.password);
 
+    let created: UserResponse;
     try {
-      return await this.prisma.user.create({
+      created = await this.prisma.user.create({
         data: {
           name: dto.name,
           email: dto.email,
@@ -112,6 +116,22 @@ export class UsersService {
     } catch (error) {
       throw this.translateUniqueViolation(error);
     }
+
+    // Criar conta é criar PRIVILÉGIO — inclusive superuser, quando o ator pode
+    // concedê-lo. Sem este registro, a trilha mostraria o rebaixamento de um
+    // usuário mas não a criação de outro já nascido com o mesmo poder.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.USER_CREATED,
+      entityType: 'user',
+      entityId: created.id,
+      metadata: {
+        targetEmail: created.email,
+        role: created.role,
+        isSuperuser: created.isSuperuser,
+      },
+    });
+
+    return created;
   }
 
   async update(
@@ -182,6 +202,51 @@ export class UsersService {
       await this.tokenService.revokeAllForUser(id);
     }
 
+    // Mudanca de PRIVILEGIO tem registro proprio, separado da edicao comum: e a
+    // pergunta que a auditoria de fato responde ("quem virou superusuario, e
+    // quem concedeu"). Nome e e-mail alterados nao merecem a mesma atencao.
+    if (dto.role !== undefined && dto.role !== target.role) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.USER_ROLE_CHANGED,
+        entityType: 'user',
+        entityId: id,
+        metadata: { from: target.role, to: dto.role, targetEmail: target.email },
+      });
+    }
+
+    if (dto.isSuperuser !== undefined && dto.isSuperuser !== target.isSuperuser) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.USER_SUPERUSER_CHANGED,
+        entityType: 'user',
+        entityId: id,
+        metadata: {
+          from: target.isSuperuser,
+          to: dto.isSuperuser,
+          targetEmail: target.email,
+        },
+      });
+    }
+
+    // Edição comum, registrada por QUAIS campos mudaram — não pelos valores.
+    // O que a operação precisa saber é que a senha de outra pessoa foi
+    // redefinida por um administrador, ou que o e-mail de acesso mudou; guardar
+    // o conteúdo transformaria a trilha num segundo lugar de onde vazar dado.
+    //
+    // A lista vai como texto: o `sanitize` colapsa arrays em "[n itens]" para
+    // impedir que um segredo escape aninhado, e aqui isso apagaria a informação.
+    const changedFields = (
+      ['name', 'email', 'password', 'mustChangePassword'] as const
+    ).filter((field) => dto[field] !== undefined);
+
+    if (changedFields.length > 0) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.USER_UPDATED,
+        entityType: 'user',
+        entityId: id,
+        metadata: { changedFields: changedFields.join(','), targetEmail: target.email },
+      });
+    }
+
     return updated;
   }
 
@@ -218,6 +283,16 @@ export class UsersService {
 
     // refresh_token cai por ON DELETE CASCADE.
     await this.prisma.user.delete({ where: { id } });
+
+    // Registrado DEPOIS da exclusão: se ela falhar, não deve haver trilha de um
+    // fato que não aconteceu. `actorEmail` guarda quem excluiu; o alvo vai no
+    // metadata porque a linha do usuário não existe mais.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.USER_DELETED,
+      entityType: 'user',
+      entityId: id,
+      metadata: { targetEmail: target.email, targetRole: target.role },
+    });
   }
 
   /** Lista técnicos para atribuição de chamados (usado pelas Fases 04 e 09). */

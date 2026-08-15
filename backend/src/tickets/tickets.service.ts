@@ -11,6 +11,8 @@ import { statusLabel, TicketStatus } from '../common/domain/legacy-enums';
 import { TICKET_CREATED, TICKET_STATUS_CHANGED } from '../common/events/domain-events';
 import { DomainEventsService } from '../common/events/domain-events.service';
 import { instantToWallClockParts } from '../common/time/legacy-clock';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ChangeTicketStatusDto,
@@ -50,6 +52,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: DomainEventsService,
+    private readonly audit: AuditService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -375,6 +378,19 @@ export class TicketsService {
     // As atividades caem por ON DELETE CASCADE, reproduzindo o
     // cascade="all, delete-orphan" do legado.
     await this.prisma.ticket.delete({ where: { id } });
+
+    // A exclusao leva as atividades junto, entao apaga horas ja lancadas --
+    // motivo suficiente para deixar rastro de quem fez.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.TICKET_DELETED,
+      entityType: 'ticket',
+      entityId: id,
+      metadata: {
+        title: existing.title,
+        status: existing.status,
+        clientId: existing.clientId,
+      },
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import {
   type TicketStatus,
   type UpdateTicketInput,
 } from '../api/tickets'
+import { statusLabel } from '../domain/ticket-status'
 
 export const ticketKeys = {
   all: ['tickets'] as const,
@@ -76,15 +77,60 @@ export function useUpdateTicket(id: number) {
   })
 }
 
+/**
+ * Mudança de status com atualização otimista e rollback (Fase 11).
+ *
+ * É a única mutação do sistema que merece isso: o resultado é previsível (o
+ * status vira exatamente o que foi escolhido), a tela mostra o valor em vários
+ * lugares ao mesmo tempo, e a operação é frequente. Criar e editar chamado, ao
+ * contrário, dependem de campos que só o servidor decide — número, timestamps,
+ * cliente resolvido —, e adivinhar isso na tela seria mostrar dado falso.
+ *
+ * O `cancelQueries` não é detalhe: sem ele, um refetch que já estava no ar pode
+ * chegar DEPOIS da escrita otimista e repor o status antigo, produzindo um
+ * "piscar" que parece falha de gravação.
+ */
 export function useChangeTicketStatus(id: number) {
   const queryClient = useQueryClient()
   const invalidate = useTicketInvalidation()
-  return useMutation({
+
+  return useMutation<Ticket, unknown, TicketStatus, { previous?: Ticket }>({
     mutationFn: (status: TicketStatus) => ticketsApi.changeStatus(id, status),
+
+    onMutate: async (status: TicketStatus) => {
+      await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) })
+
+      const previous = queryClient.getQueryData<Ticket>(ticketKeys.detail(id))
+      if (previous) {
+        queryClient.setQueryData<Ticket>(ticketKeys.detail(id), {
+          ...previous,
+          status,
+          // `statusLabel` vem pronto da API; no estado otimista ele é derivado
+          // do espelho local, senão o texto continuaria mostrando o status
+          // anterior enquanto a cor já teria mudado.
+          statusLabel: statusLabel(status),
+        })
+      }
+
+      // Devolvido ao `onError` — é o retrato para onde voltar.
+      return { previous }
+    },
+
+    onError: (_error, _status, context) => {
+      // Só repõe se havia algo antes: escrever `undefined` marcaria a query
+      // como carregada com dado vazio e a tela renderizaria um chamado em branco.
+      if (context?.previous) {
+        queryClient.setQueryData(ticketKeys.detail(id), context.previous)
+      }
+    },
+
     onSuccess: (ticket: Ticket) => {
       queryClient.setQueryData(ticketKeys.detail(id), ticket)
-      invalidate()
     },
+
+    // Em sucesso e em falha: a listagem mostra o status e precisa refletir o
+    // desfecho real, seja ele a mudança confirmada ou o valor de volta.
+    onSettled: invalidate,
   })
 }
 

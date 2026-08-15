@@ -4,6 +4,8 @@ import {
   SYSTEM_PARAMETER_DEFAULTS,
   SystemParameterKey,
 } from '../common/domain/legacy-enums';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CompanyParametersResponse,
@@ -22,7 +24,10 @@ import {
  */
 @Injectable()
 export class ParametersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** `get_system_parameter(key, default)`: default quando ausente OU vazio. */
   async get(key: SystemParameterKey): Promise<string> {
@@ -138,6 +143,15 @@ export class ParametersService {
           }),
         ),
       );
+
+      // So as CHAVES alteradas, nao os valores: o logo pode ser uma URL longa e
+      // o endereco e dado da empresa. Quem precisa do valor consulta o estado
+      // atual; a trilha responde "quem mexeu em que, e quando".
+      await this.audit.record({
+        action: AUDIT_ACTIONS.PARAMETERS_UPDATED,
+        entityType: 'parameters',
+        metadata: { keys: Array.from(updates.keys()).join(', ') },
+      });
     }
 
     return this.findAll();

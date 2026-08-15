@@ -44,11 +44,13 @@ describe('Documento Swagger', () => {
     expect(document.components?.securitySchemes).toHaveProperty('access-token');
   });
 
-  it('documenta todas as rotas implementadas até a Fase 07 (com a 05)', () => {
+  it('documenta todas as rotas implementadas até a Fase 11', () => {
     const paths = Object.keys(document.paths).sort();
 
     expect(paths).toEqual([
       '/api/v1/analytics',
+      // Fase 11: consulta da trilha de auditoria (superuser).
+      '/api/v1/audit',
       '/api/v1/auth/change-password',
       '/api/v1/auth/forgot-password',
       '/api/v1/auth/login',

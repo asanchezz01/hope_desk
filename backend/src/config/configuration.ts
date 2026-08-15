@@ -16,6 +16,15 @@ export interface AppConfig {
   logLevel: string;
   corsOrigins: string[];
   appPublicUrl: string;
+  /**
+   * Regravar o hash Werkzeug em bcrypt no primeiro login válido.
+   *
+   * Ligado por padrão — é o endurecimento da Fase 02. Precisa ser DESLIGADO
+   * enquanto o Flask ainda estiver no ar sobre a mesma base de usuários: o
+   * Werkzeug não lê bcrypt, então cada rehash tranca aquele usuário fora do
+   * sistema antigo, sem aviso e sem volta. Ver `docs/CUTOVER.md` §6.1.
+   */
+  passwordRehashEnabled: boolean;
   databaseUrl: string;
   jwt: {
     accessSecret: string;
@@ -161,6 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: str(env, 'LOG_LEVEL') || (isProduction ? 'info' : 'debug'),
     corsOrigins,
     appPublicUrl: str(env, 'APP_PUBLIC_URL') || 'http://localhost:8081',
+    passwordRehashEnabled: bool(env, 'PASSWORD_REHASH_ENABLED', true),
     databaseUrl,
     jwt: {
       accessSecret,

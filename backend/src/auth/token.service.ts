@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG_NAMESPACE, AppConfig } from '../config/configuration';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserRole } from '../common/domain/legacy-enums';
 import {
@@ -43,6 +45,7 @@ export class TokenService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
     configService: ConfigService,
   ) {
     this.config = configService.getOrThrow<AppConfig>(APP_CONFIG_NAMESPACE);
@@ -151,6 +154,19 @@ export class TokenService {
       // Token já rotacionado sendo reapresentado: possível roubo de token.
       // Revoga a família inteira e força novo login.
       await this.revokeAllForUser(stored.userId);
+
+      // O único evento aqui que é indício de ATAQUE, e não de uso normal.
+      // Também acontece por defeito de cliente (dois refreshes concorrentes
+      // com o mesmo token), e é exatamente por isso que precisa ficar
+      // registrado: sem a trilha, as duas causas são indistinguíveis a
+      // posteriori — o sintoma é o mesmo logout inexplicado.
+      await this.audit.record({
+        action: AUDIT_ACTIONS.REFRESH_REUSE_DETECTED,
+        entityType: 'user',
+        entityId: stored.userId,
+        actorId: stored.userId,
+        metadata: { jti: payload.jti },
+      });
       throw new UnauthorizedException(
         'Refresh token já utilizado. Faça login novamente.',
       );

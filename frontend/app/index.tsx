@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
-import React, { useMemo, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 
 import {
   TICKET_STATUS_FILTERS,
@@ -21,6 +21,7 @@ import { useAvailableYears, useTicketList } from '../src/hooks/useTickets'
 import AppShell from '../src/layout/AppShell'
 import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
+import { readTicketFilters, saveTicketFilters } from '../src/storage/preferences'
 import { useTheme } from '../src/theme/ThemeContext'
 
 const PAGE_SIZE = 25
@@ -46,6 +47,37 @@ export default function TicketsScreen() {
   const [status, setStatus] = useState<TicketStatusFilter>('nao_concluidos')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+
+  // Filtros salvos (Fase 11). A leitura é assíncrona, então a tela começa nos
+  // padrões e é corrigida quando o disco responde. `filtersLoaded` impede que o
+  // efeito de gravação rode antes disso e sobrescreva a escolha guardada com o
+  // padrão — o bug clássico deste par de efeitos.
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void readTicketFilters().then((stored) => {
+      if (!active) return
+      if (stored) {
+        setYear(stored.year)
+        setMonth(stored.month)
+        // O status vem de uma versão anterior do aplicativo e pode não existir
+        // mais na lista de hoje; nesse caso o padrão prevalece.
+        if ((TICKET_STATUS_FILTERS as readonly string[]).includes(stored.status)) {
+          setStatus(stored.status as TicketStatusFilter)
+        }
+      }
+      setFiltersLoaded(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!filtersLoaded) return
+    void saveTicketFilters({ year, month, status })
+  }, [filtersLoaded, year, month, status])
 
   const debouncedSearch = useDebouncedValue(search)
   const allPeriods = year === ALL_PERIODS
@@ -141,6 +173,16 @@ export default function TicketsScreen() {
         keyExtractor={(ticket) => String(ticket.id)}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
+        refreshControl={
+          <RefreshControl
+            // `isLoading` é a primeira carga, que já tem esqueleto: mostrar o
+            // indicador de refresh junto duplicaria a sinalização.
+            refreshing={list.isRefetching && !list.isLoading}
+            onRefresh={() => void list.refetch()}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.headerTop}>

@@ -15,6 +15,8 @@ import {
   formatWallClockPtBr,
   parseWallClockInput,
 } from '../common/time/legacy-clock';
+import { AuditService } from '../audit/audit.service';
+import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { canViewTicket } from '../tickets/ticket.policy';
 import {
@@ -49,6 +51,7 @@ export class ActivitiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: DomainEventsService,
+    private readonly audit: AuditService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -172,6 +175,20 @@ export class ActivitiesService {
     }
 
     await this.prisma.activity.delete({ where: { id: activityId } });
+
+    // Excluir atividade muda o banco de horas -- e, por consequencia, o que
+    // sera cobrado. Quem excluiu e o que foi excluido precisam ficar.
+    await this.audit.record({
+      action: AUDIT_ACTIONS.ACTIVITY_DELETED,
+      entityType: 'activity',
+      entityId: activityId,
+      metadata: {
+        ticketId,
+        createdById: existing.createdById,
+        startedAt: existing.startedAt.toISOString(),
+        endedAt: existing.endedAt.toISOString(),
+      },
+    });
   }
 
   // -------------------------------------------------------------------------

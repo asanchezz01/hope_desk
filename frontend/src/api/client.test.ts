@@ -228,3 +228,115 @@ describe('contrato com o backend', () => {
     expect(authHeaderOf(fetchMock.mock.calls[0])).toBe('Bearer ok')
   })
 })
+
+/**
+ * Endurecimento observável no cliente (Fase 11).
+ *
+ * A API passou a limitar taxa e a correlacionar requisições. Sem estes testes,
+ * o 429 cairia na mensagem genérica de "não foi possível concluir" — que leva a
+ * pessoa a tentar de novo imediatamente, que é exatamente o que o limite existe
+ * para impedir.
+ */
+describe('rate limiting e correlação (Fase 11)', () => {
+  function rateLimited(headers: Record<string, string> = {}): Response {
+    return new Response(JSON.stringify({ message: 'ThrottlerException: Too Many Requests' }), {
+      status: 429,
+      headers: { 'content-type': 'application/json', ...headers },
+    })
+  }
+
+  it('envia x-request-id em toda requisição, no formato que a API aceita', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(jsonResponse(200, {}))
+
+    await request('/auth/me')
+
+    const sent = new Headers(fetchMock.mock.calls[0][1].headers).get('x-request-id')
+    // O mesmo formato validado pelo servidor: fora dele o valor é descartado em
+    // silêncio e o ID do log deixa de ser o que o cliente registrou.
+    expect(sent).toMatch(/^[A-Za-z0-9._-]{8,128}$/)
+  })
+
+  it('gera um ID diferente por requisição', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(jsonResponse(200, {}))
+
+    await request('/auth/me')
+    await request('/auth/me')
+
+    const first = new Headers(fetchMock.mock.calls[0][1].headers).get('x-request-id')
+    const second = new Headers(fetchMock.mock.calls[1][1].headers).get('x-request-id')
+    expect(first).not.toBe(second)
+  })
+
+  it('classifica o 429 e informa a espera vinda do Retry-After', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(rateLimited({ 'retry-after': '42' }))
+
+    const error = await request<never>('/tickets').catch((thrown: unknown) => thrown as ApiError)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.isRateLimited).toBe(true)
+    expect(error.retryAfterSeconds).toBe(42)
+    expect(error.message).toContain('42 segundos')
+    // A mensagem crua do NestJS não pode chegar à tela.
+    expect(error.message).not.toContain('ThrottlerException')
+  })
+
+  it('sem Retry-After, ainda pede espera em vez de sugerir nova tentativa', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(rateLimited())
+
+    const error = await request<never>('/tickets').catch((thrown: unknown) => thrown as ApiError)
+
+    expect(error.isRateLimited).toBe(true)
+    expect(error.retryAfterSeconds).toBeUndefined()
+    expect(error.message).toContain('Aguarde')
+  })
+
+  it('não confunde 429 com falta de permissão nem com validação', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(rateLimited())
+
+    const error = await request<never>('/tickets').catch((thrown: unknown) => thrown as ApiError)
+
+    expect(error.isForbidden).toBe(false)
+    expect(error.isValidation).toBe(false)
+    expect(error.isUnauthorized).toBe(false)
+  })
+
+  it('o 429 NÃO dispara refresh de sessão', async () => {
+    // Um refresh disparado por 429 gastaria o refresh token — e o próximo 401
+    // legítimo encontraria uma família de tokens já rotacionada.
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(rateLimited())
+
+    await request<never>('/tickets').catch(() => undefined)
+
+    expect(fetchMock.mock.calls.every(([url]) => !url.endsWith('/auth/refresh'))).toBe(true)
+  })
+
+  it('prefere o correlation ID devolvido pelo servidor ao enviado', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Erro interno' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json', 'x-request-id': 'id-do-servidor' },
+      })
+    )
+
+    const error = await request<never>('/tickets').catch((thrown: unknown) => thrown as ApiError)
+
+    expect(error.correlationId).toBe('id-do-servidor')
+  })
+
+  it('preserva o ID enviado quando o servidor sequer responde', async () => {
+    storageMock.__setSession({ accessToken: 'ok', refreshToken: 'r' })
+    fetchMock.mockRejectedValue(new TypeError('Network request failed'))
+
+    const error = await request<never>('/tickets').catch((thrown: unknown) => thrown as ApiError)
+
+    expect(error.isOffline).toBe(true)
+    expect(error.correlationId).toMatch(/^[A-Za-z0-9._-]{8,128}$/)
+  })
+})

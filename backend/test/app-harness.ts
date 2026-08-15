@@ -1,6 +1,7 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
+import { applyGlobalSetup } from '../src/app-setup';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -22,15 +23,12 @@ export async function createTestHarness(): Promise<TestHarness> {
 
   const app = moduleRef.createNestApplication();
 
-  app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: false },
-    }),
-  );
+  // Mesma configuração do main.ts: sem isto a suíte testaria uma aplicação
+  // sem headers de segurança nem CORS, justamente o que a Fase 11 introduz.
+  applyGlobalSetup(app, {
+    apiPrefix: 'api/v1',
+    corsOrigins: ['http://localhost:8081'],
+  });
 
   await app.init();
 
