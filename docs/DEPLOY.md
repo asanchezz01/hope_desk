@@ -47,7 +47,7 @@ loopback existem para diagnóstico por SSH e não são acessíveis de fora.
 Em ambos os casos o job `ci` roda antes e o deploy espera (`needs: ci`). Push
 quebrado não chega à VPS.
 
-O que a Action faz na máquina, via SSH:
+O que a Action faz na máquina:
 
 1. clona `/opt/hopedesk` se ainda não existir (bootstrap; o repositório é
    público, então não há credencial de git guardada na VPS);
@@ -61,21 +61,50 @@ O que a Action faz na máquina, via SSH:
 Nenhum segredo da aplicação passa pela Action: senha do banco e segredos JWT
 nascem na VPS e ficam só no `.env` de lá.
 
-### Segredos do repositório
+### Runner self-hosted, e por que não é SSH
 
-`Settings → Secrets and variables → Actions`:
+O job de publicação roda **na própria VPS**, num runner self-hosted. Não há
+segredo de acesso no repositório: nenhum `VPS_HOST`, nenhuma senha.
 
-| Segredo | Conteúdo |
-|---|---|
-| `VPS_HOST` | endereço da VPS |
-| `VPS_USER` | usuário SSH |
-| `VPS_SSH_PASSWORD` | senha SSH — **ou** `VPS_SSH_KEY` (preferível) |
-| `VPS_SSH_PORT` | opcional; 22 se ausente |
+A primeira versão entrava por SSH e não funcionou: o firewall do **provedor**
+(aplicado fora da VM — o `ufw` de dentro já liberava a 22 para qualquer origem)
+descarta a porta 22 para quem não é o IP do escritório. O runner do GitHub
+morria em `dial tcp ***:22: i/o timeout` e o `auth.log` da VPS não registrava
+tentativa alguma: os pacotes nunca chegavam. Um runner self-hosted inverte o
+sentido da conexão — ele sai da VPS para o GitHub por 443 —, então não há porta
+a abrir nem senha de root no CI.
 
-Chave em vez de senha é melhor por um motivo prático: pode ser revogada sozinha
-e restringida a comando. Para migrar, gere um par dedicado ao deploy, ponha a
-pública em `~/.ssh/authorized_keys` da VPS, guarde a privada em `VPS_SSH_KEY` e
-apague `VPS_SSH_PASSWORD`.
+**O preço, que precisa ser pago junto:** repositório público com runner
+self-hosted permitiria a um PR de fork executar código na máquina. Por isso a
+política de aprovação está em `all_external_contributors` (Settings → Actions →
+General → *Fork pull request workflows from outside collaborators*). Afrouxar
+essa política transforma este runner num problema de segurança.
+
+Como ele foi instalado, para o caso de precisar refazer:
+
+```bash
+# na VPS, como root
+useradd -m -s /bin/bash gha && usermod -aG docker gha   # docker: constrói e sobe a stack
+mkdir -p /opt/actions-runner && chown gha:gha /opt/actions-runner
+cd /opt/actions-runner
+curl -fsSL -o r.tar.gz https://github.com/actions/runner/releases/download/v2.336.0/actions-runner-linux-x64-2.336.0.tar.gz
+tar xzf r.tar.gz && rm r.tar.gz && chown -R gha:gha .
+
+# token de registro: Settings → Actions → Runners → New self-hosted runner
+sudo -u gha ./config.sh --url https://github.com/asanchezz01/hope_desk \
+  --token <TOKEN> --name srv1901419 --labels hopedesk-vps \
+  --work _work --unattended --replace
+
+./svc.sh install gha && ./svc.sh start
+chown -R gha:gha /opt/hopedesk    # o deploy roda como `gha`
+```
+
+O rótulo `hopedesk-vps` é o que o workflow endereça em `runs-on`. Diagnóstico:
+
+```bash
+systemctl status actions.runner.asanchezz01-hope_desk.srv1901419
+journalctl -u actions.runner.asanchezz01-hope_desk.srv1901419 -n 50
+```
 
 ---
 

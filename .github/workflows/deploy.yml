@@ -9,14 +9,25 @@
 # outro branch: o deploy usa `github.ref_name`, ou seja, o branch de onde o
 # disparo partiu. Assim dá para validar na VPS antes de mexer em `main`.
 #
-# ## Segredos necessários no repositório
+# ## Por que runner self-hosted, e não SSH
 #
-#   VPS_HOST          endereço da VPS
-#   VPS_USER          usuário SSH
-#   VPS_SSH_PASSWORD  senha SSH  (ou VPS_SSH_KEY, preferível — ver docs/DEPLOY.md)
+# A primeira versão entrava por SSH com `appleboy/ssh-action`. Não funciona
+# nesta máquina: o firewall do provedor (fora da VM — dentro dela o `ufw` já
+# liberava) descarta a porta 22 para quem não é o IP do escritório. O runner do
+# GitHub morria em `dial tcp ***:22: i/o timeout`, e o `auth.log` da VPS não
+# registrava tentativa alguma: os pacotes nunca chegavam.
 #
-# Nenhum segredo da aplicação passa por aqui: a senha do banco e os segredos JWT
-# são gerados NA VPS pelo `remote-deploy.sh` e ficam só no `.env` de lá.
+# O runner self-hosted inverte o sentido da conexão — ele SAI da VPS para o
+# GitHub, por 443. Nenhuma porta a abrir, nenhuma senha de root no CI.
+#
+# Preço, que precisa ser pago junto: repositório público com runner
+# self-hosted permitiria a um PR de fork executar código na máquina. Por isso a
+# política de aprovação está em `all_external_contributors` — nenhum workflow
+# de fora roda sem aprovação humana. Se essa política for afrouxada, este
+# runner vira um problema de segurança, não uma conveniência.
+#
+# Nenhum segredo da aplicação passa por aqui: a senha do banco e os segredos
+# JWT são gerados NA VPS pelo `remote-deploy.sh` e ficam só no `.env` de lá.
 name: Deploy
 
 on:
@@ -37,72 +48,56 @@ jobs:
   deploy:
     name: Publicar na VPS
     needs: ci
-    runs-on: ubuntu-latest
+    # O runner instalado em /opt/actions-runner, como serviço, usuário `gha`.
+    runs-on: [self-hosted, hopedesk-vps]
     timeout-minutes: 20
     environment:
       name: producao
       url: https://hopedesk.hopecash.tech
 
     steps:
-      - name: Conferir segredos
-        # Falha cedo e com mensagem clara. Sem isto, a ação de SSH falharia com
-        # um erro de conexão genérico e a causa demoraria a aparecer.
+      - name: Publicar
+        # Roda na própria VPS. O `_work` do runner não é a stack: o alvo é
+        # sempre /opt/hopedesk, que é o que o compose e o `.env` conhecem.
         run: |
-          missing=""
-          [ -z "${{ secrets.VPS_HOST }}" ] && missing="$missing VPS_HOST"
-          [ -z "${{ secrets.VPS_USER }}" ] && missing="$missing VPS_USER"
-          if [ -z "${{ secrets.VPS_SSH_PASSWORD }}" ] && [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
-            missing="$missing VPS_SSH_PASSWORD|VPS_SSH_KEY"
+          set -e
+          REPO_DIR=/opt/hopedesk
+          BRANCH='${{ github.ref_name }}'
+          REPO_URL='https://github.com/${{ github.repository }}.git'
+
+          # Bootstrap: se o diretório não existir (máquina nova, ou alguém o
+          # apagou), clona. O repositório é público — sem credencial de git na
+          # VPS para vazar ou expirar.
+          if [ ! -d "$REPO_DIR/.git" ]; then
+            echo "[bootstrap] clonando $REPO_URL em $REPO_DIR"
+            git clone "$REPO_URL" "$REPO_DIR"
           fi
-          if [ -n "$missing" ]; then
-            echo "Faltam segredos no repositório:$missing"
-            echo "Configure em Settings → Secrets and variables → Actions."
-            exit 1
-          fi
 
-      - name: Deploy por SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_SSH_PASSWORD }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT || 22 }}
-          command_timeout: 15m
-          script_stop: true
-          script: |
-            set -e
-            REPO_DIR=/opt/hopedesk
-            BRANCH='${{ github.ref_name }}'
-            REPO_URL='https://github.com/${{ github.repository }}.git'
+          cd "$REPO_DIR"
+          git remote set-url origin "$REPO_URL"
+          # O script vem do próprio repositório e é atualizado pelo git no
+          # primeiro passo dele mesmo — por isso o fetch acontece aqui antes.
+          git fetch --prune origin "$BRANCH"
+          git checkout -B "$BRANCH" "origin/$BRANCH"
+          chmod +x scripts/deploy/remote-deploy.sh
+          REPO_DIR="$REPO_DIR" BRANCH="$BRANCH" ./scripts/deploy/remote-deploy.sh
 
-            # Bootstrap: na primeira execução o diretório não existe. Clonar
-            # aqui evita um passo manual por SSH — e o repositório é público,
-            # então não há credencial de git na VPS para vazar ou expirar.
-            if [ ! -d "$REPO_DIR/.git" ]; then
-              echo "[bootstrap] clonando $REPO_URL em $REPO_DIR"
-              rm -rf "$REPO_DIR"
-              git clone "$REPO_URL" "$REPO_DIR"
-            fi
+  verificar:
+    name: Verificar o endereço público
+    needs: deploy
+    # De propósito num runner do GitHub, e não na VPS: conferir do lado de
+    # dentro provaria só que o container responde — o que o passo anterior já
+    # fez. O que falta provar é o caminho de fora: DNS, proxy e certificado.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
-            cd "$REPO_DIR"
-            # Se o clone veio de outro lugar (ou de um deploy antigo), realinha.
-            git remote set-url origin "$REPO_URL"
-            # O script vem do próprio repositório e é atualizado pelo git no
-            # primeiro passo dele mesmo — por isso o fetch acontece aqui antes.
-            git fetch --prune origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            chmod +x scripts/deploy/remote-deploy.sh
-            REPO_DIR="$REPO_DIR" BRANCH="$BRANCH" ./scripts/deploy/remote-deploy.sh
-
-      - name: Verificar o endereço público
-        # O passo anterior confere a API por dentro (loopback). Este confere o
-        # que o usuário realmente acessa: DNS, proxy e certificado no caminho.
+    steps:
+      - name: Conferir API e app Web
         run: |
           echo "== API =="
           curl -fsS --max-time 20 https://hopedesk-api.hopecash.tech/api/v1/health || {
             echo "A API não respondeu pelo endereço público."
-            echo "A stack pode estar de pé mesmo assim: o passo anterior já a"
+            echo "A stack pode estar de pé mesmo assim: o job anterior já a"
             echo "conferiu por dentro. O que falta é o caminho até ela."
             echo "Confira, nesta ordem (ver docs/DEPLOY.md §4):"
             echo "  1. registro DNS de hopedesk-api.hopecash.tech apontando para a VPS;"

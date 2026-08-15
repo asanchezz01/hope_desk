@@ -1688,8 +1688,8 @@ em endereços e banco próprios, e o Flask segue intocado sobre a base dele.
 
 | # | Pendência |
 |---|---|
-| 41 | Registros DNS e proxy hosts do nginx-proxy-manager (`DEPLOY.md` §4.1 e §4.3) — feitos fora do repositório |
-| 42 | Autenticação SSH da Action por **senha**. Chave dedicada é revogável sozinha e restringível a comando (`DEPLOY.md` §2) |
+| 41 | **Proxy hosts do nginx-proxy-manager ainda não existem** (`DEPLOY.md` §4.3): os dois domínios caem no "Default Site" e não têm certificado. O DNS já aponta para a VPS. Enquanto isso, a stack só responde pelo loopback |
+| 42 | ~~Autenticação SSH da Action por senha~~ — ✅ resolvido em 2026-08-15, e não do jeito previsto: o firewall do **provedor** descarta a porta 22 para o runner do GitHub (o `ufw` da VM já liberava, e o `auth.log` não registrava tentativa alguma). A publicação passou a rodar num runner self-hosted, que sai da VPS por 443. **Exige** manter a aprovação de PR de fork em `all_external_contributors` — o repositório é público |
 | 43 | **Não há backup automático do banco novo.** Enquanto for base de teste não há o que perder; antes do cutover precisa existir |
 | 44 | A suíte de integração não roda nesta máquina sem Docker (precisa de Postgres real); quem a executa de verdade é o CI |
 
