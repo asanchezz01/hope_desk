@@ -1,0 +1,7 @@
+# Saída de build: `expo export` gera bundles de megabytes em dist/, e sem esta
+# lista o `eslint .` tenta analisá-los — o comando passa de dez minutos.
+dist/
+web-build/
+node_modules/
+.expo/
+coverage/

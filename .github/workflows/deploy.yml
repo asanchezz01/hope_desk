@@ -1,0 +1,115 @@
+# Deploy em produção (VPS).
+#
+# Dispara a cada push em `main` — e SÓ depois de o CI passar inteiro. A ordem
+# importa: `needs: ci` faz o deploy esperar; sem isso, um push quebrado subiria
+# em produção enquanto os testes ainda rodavam.
+#
+# `workflow_dispatch` fica disponível para repetir um deploy sem novo commit
+# (por exemplo, depois de mexer no `.env` da VPS) e para publicar a partir de
+# outro branch: o deploy usa `github.ref_name`, ou seja, o branch de onde o
+# disparo partiu. Assim dá para validar na VPS antes de mexer em `main`.
+#
+# ## Segredos necessários no repositório
+#
+#   VPS_HOST          endereço da VPS
+#   VPS_USER          usuário SSH
+#   VPS_SSH_PASSWORD  senha SSH  (ou VPS_SSH_KEY, preferível — ver docs/DEPLOY.md)
+#
+# Nenhum segredo da aplicação passa por aqui: a senha do banco e os segredos JWT
+# são gerados NA VPS pelo `remote-deploy.sh` e ficam só no `.env` de lá.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez. `cancel-in-progress: false` de propósito: interromper um
+# deploy no meio deixa a stack em estado indefinido.
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Publicar na VPS
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: producao
+      url: https://hopedesk.hopecash.tech
+
+    steps:
+      - name: Conferir segredos
+        # Falha cedo e com mensagem clara. Sem isto, a ação de SSH falharia com
+        # um erro de conexão genérico e a causa demoraria a aparecer.
+        run: |
+          missing=""
+          [ -z "${{ secrets.VPS_HOST }}" ] && missing="$missing VPS_HOST"
+          [ -z "${{ secrets.VPS_USER }}" ] && missing="$missing VPS_USER"
+          if [ -z "${{ secrets.VPS_SSH_PASSWORD }}" ] && [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            missing="$missing VPS_SSH_PASSWORD|VPS_SSH_KEY"
+          fi
+          if [ -n "$missing" ]; then
+            echo "Faltam segredos no repositório:$missing"
+            echo "Configure em Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Deploy por SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_SSH_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          command_timeout: 15m
+          script_stop: true
+          script: |
+            set -e
+            REPO_DIR=/opt/hopedesk
+            BRANCH='${{ github.ref_name }}'
+            REPO_URL='https://github.com/${{ github.repository }}.git'
+
+            # Bootstrap: na primeira execução o diretório não existe. Clonar
+            # aqui evita um passo manual por SSH — e o repositório é público,
+            # então não há credencial de git na VPS para vazar ou expirar.
+            if [ ! -d "$REPO_DIR/.git" ]; then
+              echo "[bootstrap] clonando $REPO_URL em $REPO_DIR"
+              rm -rf "$REPO_DIR"
+              git clone "$REPO_URL" "$REPO_DIR"
+            fi
+
+            cd "$REPO_DIR"
+            # Se o clone veio de outro lugar (ou de um deploy antigo), realinha.
+            git remote set-url origin "$REPO_URL"
+            # O script vem do próprio repositório e é atualizado pelo git no
+            # primeiro passo dele mesmo — por isso o fetch acontece aqui antes.
+            git fetch --prune origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+            chmod +x scripts/deploy/remote-deploy.sh
+            REPO_DIR="$REPO_DIR" BRANCH="$BRANCH" ./scripts/deploy/remote-deploy.sh
+
+      - name: Verificar o endereço público
+        # O passo anterior confere a API por dentro (loopback). Este confere o
+        # que o usuário realmente acessa: DNS, proxy e certificado no caminho.
+        run: |
+          echo "== API =="
+          curl -fsS --max-time 20 https://hopedesk-api.hopecash.tech/api/v1/health || {
+            echo "A API não respondeu pelo endereço público."
+            echo "A stack pode estar de pé mesmo assim: o passo anterior já a"
+            echo "conferiu por dentro. O que falta é o caminho até ela."
+            echo "Confira, nesta ordem (ver docs/DEPLOY.md §4):"
+            echo "  1. registro DNS de hopedesk-api.hopecash.tech apontando para a VPS;"
+            echo "  2. proxy host no nginx-proxy-manager: hopedesk-api -> hopedesk-api:3000;"
+            echo "  3. certificado emitido para o domínio."
+            exit 1
+          }
+          echo
+          echo "== App Web =="
+          curl -fsS --max-time 20 -o /dev/null -w "HTTP %{http_code}\n" https://hopedesk.hopecash.tech/

@@ -1,0 +1,115 @@
+# Verificação de todo push e de todo pull request.
+#
+# O deploy (deploy.yml) espera este workflow terminar antes de publicar. Sem
+# isso, um push quebrado iria a produção enquanto os testes ainda rodavam.
+name: CI
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+  workflow_call: # chamado pelo deploy
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      # A suíte de integração precisa de PostgreSQL de verdade: ela verifica
+      # constraints, índice funcional e defaults do banco, que nenhum dublê
+      # reproduz.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hopedesk_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # `localhost` está na lista de destinos descartáveis da trava de
+      # segurança (`disposable-database.ts`) — a suíte TRUNCA as tabelas.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5434/hopedesk_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5434/hopedesk_test?schema=public
+      JWT_SECRET: ci-access-secret-suficientemente-longo-para-a-validacao
+      JWT_REFRESH_SECRET: ci-refresh-secret-diferente-do-de-acesso-e-longo
+      MAIL_ENABLED: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Aplicar migrations no banco de teste
+        run: npx prisma migrate deploy
+
+      - run: npm run typecheck
+
+      - name: Lint (sem --fix, para falhar de verdade)
+        run: npm run lint
+
+      - run: npm run build
+
+      - name: Testes unitários
+        run: npm test
+
+      - name: Testes de integração
+        run: npm run test:e2e
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - name: Lint (--max-warnings 0)
+        run: npm run lint:check
+
+      - run: npm test
+
+      - name: Exportar o Web
+        # Prova que o bundle fecha. Já pegou defeito que typecheck e testes não
+        # pegavam — a exportação monta a árvore inteira de providers.
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_API_URL: https://hopedesk-api.hopecash.tech/api/v1
