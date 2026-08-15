@@ -29,5 +29,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
+# `127.0.0.1`, não `localhost`: dentro do container o nome resolve para `::1`
+# antes do IPv4, e o `listen 80;` do nginx.conf é só IPv4 — o wget do BusyBox
+# não tenta o segundo endereço e devolve "Connection refused". O container
+# servia 200 na porta publicada e mesmo assim aparecia como `unhealthy`.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q --spider http://localhost/ || exit 1
+    CMD wget -q --spider http://127.0.0.1/ || exit 1
