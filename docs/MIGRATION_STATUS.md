@@ -1702,6 +1702,27 @@ em endereços e banco próprios, e o Flask segue intocado sobre a base dele.
 
 ---
 
+## Correções pós-publicação (2026-08-15)
+
+Encontradas ao usar o sistema publicado, com os dados reais — não por teste.
+É o item 36 dos riscos se repetindo: build, export e suíte passavam com o
+produto inutilizável no celular.
+
+| # | Defeito | Causa | Correção |
+|---|---|---|---|
+| 47 | **Sem navegação nenhuma abaixo de 768px** | a coluna lateral do `AppShell` é a única navegação e só existe a partir do tablet; as abas prometidas na Fase 08 nunca chegaram | menu completo (`AppMenu`) com gatilho sanduíche no cabeçalho, em qualquer largura — como o `top-actions-menu` do legado. Travado por teste (`app-shell.test.tsx`) |
+| 48 | Login caía na **listagem**, não no Painel | o legado redireciona `/` para `analytics_dashboard`; a nova stack apontava para a lista | `ROUTES.home` passou a ser `/analytics` |
+| 49 | Painel sem metade dos indicadores do legado | a API sempre devolveu `tickets`, `activities` e `buckets`; o cliente não declarava esses campos e a tela ignorava o que recebia | Painel com os seis indicadores do período, a fileira estática, o gráfico de horas por dia e a tabela "Chamados do período" |
+| 50 | Não havia caminho para **Alterar Senha** fora do bloqueio de troca obrigatória | a rota existia sem entrada na navegação | item no menu |
+
+O que **não** foi replicado do legado, e é decisão consciente: o filtro cruzado
+por clique nas fatias dos gráficos. O legado fazia isso em JavaScript sobre as
+linhas da página; refazê-lo exige estado de filtro compartilhado entre seis
+gráficos e não é pré-requisito para operar. As linhas já chegam ao cliente, então
+a porta fica aberta.
+
+---
+
 ## Regra de atualização
 
 Ao concluir cada fase:

@@ -13,7 +13,15 @@ export const PUBLIC_SEGMENTS = ['login', 'forgot-password', 'reset-password'] as
 export const CHANGE_PASSWORD_SEGMENT = 'change-password'
 
 export const ROUTES = {
-  home: '/',
+  /**
+   * Destino de quem acabou de entrar.
+   *
+   * É o **Painel de Indicadores**, não a listagem, porque era isso que o
+   * legado fazia: `GET /` redirecionava para `analytics_dashboard`. Quem vem do
+   * sistema antigo espera abrir e ver os números do período; cair na lista de
+   * chamados parece que o painel sumiu.
+   */
+  home: '/analytics',
   login: '/login',
   changePassword: '/change-password',
 } as const

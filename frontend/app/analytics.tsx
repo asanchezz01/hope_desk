@@ -1,5 +1,6 @@
+import { useRouter } from 'expo-router'
 import React, { useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import BarList, { type BarListItem } from '../src/components/BarList'
 import Card from '../src/components/Card'
@@ -10,6 +11,7 @@ import StatTile from '../src/components/StatTile'
 import StatusBreakdown from '../src/components/StatusBreakdown'
 import TrendChart from '../src/components/TrendChart'
 import { useAuth } from '../src/context/AuthProvider'
+import { averageOpenAgeDays, bucketSeries, completionRate } from '../src/domain/analytics-kpis'
 import { formatDecimal, formatHours, formatInteger } from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
 import { useAnalytics } from '../src/hooks/useAnalytics'
@@ -25,6 +27,7 @@ const WHOLE_YEAR = 0
 
 export default function Analytics() {
   const theme = useTheme()
+  const router = useRouter()
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
 
@@ -102,18 +105,90 @@ export default function Analytics() {
         </View>
       ) : (
         <>
+          {/* Os seis indicadores do período, na ordem do painel antigo. */}
           <View style={styles.tiles}>
-            <StatTile label="Chamados" value={formatInteger(data.kpis.totalTickets)} />
             <StatTile
-              label="Concluídos"
-              value={formatInteger(data.kpis.concludedTickets)}
-              hint={`${formatInteger(data.kpis.openTickets)} em aberto`}
+              label="Chamados no período"
+              value={formatInteger(data.kpis.totalTickets)}
+              hint={data.periodLabel}
             />
-            <StatTile label="Horas no período" value={formatHours(data.kpis.totalHours)} />
             <StatTile
-              label="Média por chamado"
-              value={formatHours(data.kpis.averageHoursPerTicket)}
-              hint={`${formatInteger(data.kpis.ticketsWithActivity)} com atividade`}
+              label="Taxa de conclusão"
+              value={
+                completionRate(data.kpis.concludedTickets, data.kpis.totalTickets) === null
+                  ? '—'
+                  : `${completionRate(data.kpis.concludedTickets, data.kpis.totalTickets)}%`
+              }
+              hint={`${formatInteger(data.kpis.concludedTickets)} ${
+                data.kpis.concludedTickets === 1 ? 'concluído' : 'concluídos'
+              }`}
+            />
+            <StatTile
+              label="Pendentes no período"
+              value={formatInteger(data.kpis.openTickets)}
+              hint="em aberto ou em andamento"
+            />
+            <StatTile
+              label="Horas trabalhadas"
+              value={formatHours(data.kpis.totalHours)}
+              hint={
+                data.kpis.totalTickets > 0
+                  ? `média de ${formatDecimal(data.kpis.averageHoursPerTicket)} h/chamado`
+                  : `${formatInteger(data.kpis.ticketsWithActivity)} com atividade`
+              }
+            />
+            <StatTile
+              label="1ª resposta média"
+              value={
+                data.kpis.averageFirstResponseHours === null
+                  ? '—'
+                  : formatHours(data.kpis.averageFirstResponseHours)
+              }
+              // O indicador é preservado como o legado calcula, e o legado
+              // subtrai hora de parede de instante UTC — o valor sai ~3h
+              // menor que o real. Dizer isso na tela é mais honesto do que
+              // exibir um número que a operação já usa como referência sem
+              // saber da distorção.
+              hint="do chamado à 1ª atividade; cálculo herdado, tende a subestimar"
+            />
+            <StatTile
+              label="Idade média (abertos)"
+              value={
+                averageOpenAgeDays(data.tickets) === null
+                  ? '—'
+                  : `${formatDecimal(averageOpenAgeDays(data.tickets) as number)} d`
+              }
+              hint="chamados não concluídos"
+            />
+          </View>
+
+          {/* Fileira estática: não muda com filtro de período, como no legado. */}
+          <View style={styles.tiles}>
+            <StatTile
+              label="Backlog em aberto (geral)"
+              value={formatInteger(data.backlog.total)}
+              hint={
+                data.backlog.total > 0
+                  ? `mais antigo há ${formatInteger(data.backlog.oldestDays)} ${
+                      data.backlog.oldestDays === 1 ? 'dia' : 'dias'
+                    }${data.backlog.oldestTicketId ? ` (#${data.backlog.oldestTicketId})` : ''}`
+                  : 'nenhum chamado pendente'
+              }
+            />
+            <StatTile
+              label="Banco de horas acumulado"
+              value={formatHours(data.accumulatedHours)}
+              hint={`ciclo ${data.cycleStartLabel} a ${data.cycleEndLabel}`}
+            />
+            <StatTile
+              label="Horas pagas no período"
+              value={formatHours(data.paidHoursInPeriod)}
+              hint="pagamentos registrados no período"
+            />
+            <StatTile
+              label="Franquia mensal"
+              value={formatHours(data.monthlyHoursAllowance)}
+              hint="horas contratadas por mês"
             />
           </View>
 
@@ -132,33 +207,12 @@ export default function Analytics() {
           </Card>
 
           <Card>
-            <SectionTitle>Fila pendente</SectionTitle>
-            <View style={styles.tiles}>
-              <StatTile label="Em aberto ou andamento" value={formatInteger(data.backlog.total)} />
-              <StatTile
-                label="Mais antigo"
-                value={`${formatInteger(data.backlog.oldestDays)} d`}
-                hint={
-                  data.backlog.oldestTicketId
-                    ? `Chamado #${data.backlog.oldestTicketId}`
-                    : 'Nenhum pendente'
-                }
-              />
-              <StatTile
-                label="1ª resposta (média)"
-                value={
-                  data.kpis.averageFirstResponseHours === null
-                    ? '—'
-                    : formatHours(data.kpis.averageFirstResponseHours)
-                }
-                // O indicador é preservado como o legado calcula, e o legado
-                // subtrai hora de parede de instante UTC — o valor sai ~3h
-                // menor que o real. Dizer isso na tela é mais honesto do que
-                // exibir um número que a operação já usa como referência sem
-                // saber da distorção.
-                hint="Cálculo herdado do sistema antigo; tende a subestimar"
-              />
-            </View>
+            {/* O gráfico de atividades do legado: horas dentro do período
+                selecionado, dia a dia num mês e mês a mês num ano. */}
+            <SectionTitle>
+              {data.bucketMode === 'day' ? 'Horas por dia do período' : 'Horas por mês do período'}
+            </SectionTitle>
+            <TrendChart measure="horas" points={bucketSeries(data)} />
           </Card>
 
           <Card>
@@ -178,22 +232,6 @@ export default function Analytics() {
               measure="horas"
               points={data.trend.map((point) => ({ label: point.label, value: point.hours }))}
             />
-          </Card>
-
-          <Card>
-            <SectionTitle>Banco de horas</SectionTitle>
-            <View style={styles.tiles}>
-              <StatTile
-                label="Saldo do ciclo"
-                value={formatHours(data.accumulatedHours)}
-                hint={`${data.cycleStartLabel} a ${data.cycleEndLabel}`}
-              />
-              <StatTile label="Franquia mensal" value={formatHours(data.monthlyHoursAllowance)} />
-              <StatTile
-                label="Horas pagas no período"
-                value={formatHours(data.paidHoursInPeriod)}
-              />
-            </View>
           </Card>
 
           <Card>
@@ -222,6 +260,58 @@ export default function Analytics() {
               }))}
             />
           </Card>
+
+          {/* "Chamados do período" — a tabela que fechava o painel do legado.
+              As linhas já vêm na mesma resposta; não há requisição extra. */}
+          <Card>
+            <SectionTitle>Chamados do período ({formatInteger(data.tickets.length)})</SectionTitle>
+            {data.tickets.length === 0 ? (
+              <Text style={[styles.emptyRow, { color: theme.textSecondary }]}>
+                Nenhum chamado no período selecionado.
+              </Text>
+            ) : (
+              data.tickets.map((ticket) => (
+                <Pressable
+                  key={ticket.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Abrir chamado ${ticket.id}: ${ticket.title}. ${ticket.statusLabel}.`}
+                  onPress={() => router.push(`/tickets/${ticket.id}` as never)}
+                  style={[styles.ticketRow, { borderTopColor: theme.border }]}
+                >
+                  <View style={styles.ticketMain}>
+                    <Text style={[styles.ticketId, { color: theme.textSecondary }]}>
+                      #{ticket.id} · {ticket.createdLabel}
+                    </Text>
+                    <Text
+                      numberOfLines={2}
+                      style={[styles.ticketTitle, { color: theme.textPrimary }]}
+                    >
+                      {ticket.title}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.ticketMeta, { color: theme.textSecondary }]}
+                    >
+                      {ticket.client} · {ticket.module} · {ticket.technician}
+                    </Text>
+                  </View>
+                  <View style={styles.ticketSide}>
+                    <Text
+                      style={[
+                        styles.ticketStatus,
+                        { color: data.statusMeta[ticket.status]?.color ?? theme.textSecondary },
+                      ]}
+                    >
+                      {ticket.statusLabel}
+                    </Text>
+                    <Text style={[styles.ticketHours, { color: theme.textPrimary }]}>
+                      {formatDecimal(ticket.hours)} h
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </Card>
         </>
       )}
     </AppShell>
@@ -238,6 +328,21 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  emptyRow: { fontSize: 14, paddingVertical: 8 },
+  ticketRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  ticketMain: { flex: 1, gap: 2 },
+  ticketId: { fontSize: 12 },
+  ticketTitle: { fontSize: 15, fontWeight: '600' },
+  ticketMeta: { fontSize: 12 },
+  ticketSide: { alignItems: 'flex-end', gap: 4 },
+  ticketStatus: { fontSize: 12, fontWeight: '700' },
+  ticketHours: { fontSize: 13, fontWeight: '600' },
   filters: { gap: 0 },
   filtersWide: { flexDirection: 'row', gap: 12 },
   filterField: { flexGrow: 1, flexBasis: 200 },

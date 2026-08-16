@@ -44,6 +44,41 @@ export interface AnalyticsTrendPoint {
   hours: number
 }
 
+/**
+ * Uma linha da tabela "Chamados do período" do legado.
+ *
+ * A API sempre devolveu estas linhas — é assim que o legado alimentava a
+ * tabela e os filtros cruzados da página, sem novo request. O cliente só não
+ * as declarava, e por isso a tela ignorava metade do que recebia.
+ */
+export interface AnalyticsTicketRow {
+  id: number
+  title: string
+  status: string
+  statusLabel: string
+  module: string
+  client: string
+  technician: string
+  technicians: string[]
+  bucket: string
+  createdAt: string
+  createdLabel: string
+  hours: number
+  responseHours: number | null
+  /** Idade em dias; `null` para chamados já concluídos. */
+  ageDays: number | null
+}
+
+export interface AnalyticsActivityRow {
+  ticketId: number
+  bucket: string
+  technician: string
+  hours: number
+  status: string
+  module: string
+  client: string
+}
+
 export interface AnalyticsResponse {
   periodLabel: string
   bucketMode: 'day' | 'month'
@@ -58,6 +93,10 @@ export interface AnalyticsResponse {
   byTechnician: CountByKey[]
   byClient: CountByKey[]
   trend: AnalyticsTrendPoint[]
+  /** Chamados do período, linha a linha (tabela do legado). */
+  tickets: AnalyticsTicketRow[]
+  /** Atividades do período, para o gráfico por dia/mês. */
+  activities: AnalyticsActivityRow[]
   hoursByBucket: Record<string, number>
   ticketsByBucket: Record<string, number>
   accumulatedHours: number

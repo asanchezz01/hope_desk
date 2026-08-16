@@ -1,8 +1,12 @@
 // Shell adaptativo (Fase 08).
 //
 // Uma única árvore serve mobile, tablet e Web: a partir do tablet a navegação
-// vira uma coluna fixa à esquerda; no celular ela some do shell e fica a cargo
-// das telas (as abas entram na Fase 09, junto com as rotas reais).
+// vira uma coluna fixa à esquerda.
+//
+// **No celular ela não existe** — e por muito tempo não existiu nada no lugar,
+// o que prendia quem entrava pelo telefone na primeira tela. O menu completo
+// (`AppMenu`), com o gatilho sanduíche no cabeçalho, é a navegação de verdade:
+// aparece em qualquer largura e carrega a lista inteira, como no legado.
 import { usePathname, useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -14,6 +18,8 @@ import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../context/AuthProvider'
 import { useTheme } from '../theme/ThemeContext'
 
+import AppMenu, { AppMenuTrigger } from './AppMenu'
+import { menuItemsFor } from './nav-items'
 import { useBreakpoint } from './useBreakpoint'
 
 export interface NavItem {
@@ -44,6 +50,10 @@ export default function AppShell({ children, title, navItems = [], scroll = true
   const items = navItems.filter((item) => item.visible !== false)
 
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const menuItems = menuItemsFor(user)
+  const roleLabel = user ? (user.role === 'client' ? 'Cliente' : 'Técnico') : undefined
 
   // Os comandos saem da MESMA lista que a navegação lateral, já filtrada por
   // perfil. Uma lista paralela escrita à mão divergiria na primeira rota nova —
@@ -76,17 +86,11 @@ export default function AppShell({ children, title, navItems = [], scroll = true
 
         <View style={styles.headerActions}>
           {commands.length > 0 && <CommandPaletteHint onPress={() => setPaletteOpen(true)} />}
-          <ThemeToggle />
-          {user && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Sair da conta de ${user.name}`}
-              onPress={() => void signOut()}
-              style={[styles.signOut, { borderColor: theme.border }]}
-            >
-              <Text style={[styles.signOutLabel, { color: theme.textSecondary }]}>Sair</Text>
-            </Pressable>
-          )}
+          {/* O tema tem lugar próprio dentro do menu. No celular, repeti-lo no
+              cabeçalho roubaria a largura do título — que é o que diz onde a
+              pessoa está. */}
+          {(hasSideNav || !user) && <ThemeToggle />}
+          {user && <AppMenuTrigger onPress={() => setMenuOpen(true)} />}
         </View>
       </View>
 
@@ -121,6 +125,17 @@ export default function AppShell({ children, title, navItems = [], scroll = true
 
       {commands.length > 0 && (
         <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />
+      )}
+
+      {user && (
+        <AppMenu
+          items={menuItems}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          userName={user.name}
+          userRole={roleLabel}
+          onSignOut={() => void signOut()}
+        />
       )}
     </View>
   )
