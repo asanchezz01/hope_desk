@@ -23,7 +23,13 @@ não escreve.
 | Detecção de órfãos | ✅ | nenhum |
 | Preservação de IDs e sequências | ✅ | IDs preservados (inclusive os buracos), sequências à frente do maior id |
 | Paridade do banco de horas com o Flask | ✅ | mesmos números sobre o dado real (§5) |
+| **Carga na base de produção nova (VPS)** | ✅ **2026-08-15** | 193/193 linhas, checksums conferem, órfãos nenhum |
 | Cutover | ⛔ **não feito** | depende das decisões da §6 |
+
+> **A carga na VPS não é o cutover.** A base nova recebeu uma cópia do legado e
+> as duas passaram a divergir a partir daquele instante: chamado aberto no
+> Flask não aparece na API nova, e vice-versa. Enquanto os dois estiverem no
+> ar, o Flask continua sendo a fonte de verdade operacional.
 
 ---
 
@@ -108,8 +114,15 @@ Isto é a mesma comparação, com o que existe de verdade na base:
 | horas pagas | 143.43 | 143.43 |
 | saldo acumulado | 0 | 0 |
 
-`scripts/migration/parity_real_data.py` executa o `calculate_accumulated_hours`
-do `app.py` — código legado autêntico, não reimplementação.
+`scripts/migration/parity_real_data.py` executava o `calculate_accumulated_hours`
+do `app.py` — código legado autêntico, não reimplementação. **A prova foi
+repetida sobre os dados já migrados em 2026-08-15, com os mesmos números**, e
+só então o Flask saiu do repositório. O script e o `app.py` continuam
+recuperáveis:
+
+```bash
+git checkout legado-flask -- app.py scripts/migration/parity_real_data.py requirements.txt
+```
 
 ---
 
@@ -201,11 +214,22 @@ produção — o rehash acontece na **cópia local** e não afeta a produção.
 
 ---
 
-## 9. Desativação do Flask (depois, não agora)
+## 9. Desativação do Flask
 
-1. cutover aprovado e API estável por um período combinado;
+**O código saiu do repositório em 2026-08-15** (tag `legado-flask`, §5 explica
+como recuperar). **O serviço não foi desligado**: ele continua rodando sobre a
+base dele, e é isso que importa operacionalmente — apagar fonte não derruba
+processo.
+
+O que falta, na ordem:
+
+1. cutover aprovado (§6) e API estável por um período combinado;
 2. dump final do legado, guardado fora do servidor;
 3. Flask em modo somente-leitura por uma janela (rollback ainda possível);
-4. desligar o serviço, mantendo o backup e o `app.py` versionado como
-   referência dos contratos;
+4. desligar o serviço;
 5. só então remover o container e as credenciais antigas.
+
+Enquanto o passo 4 não acontecer, **as duas bases divergem**: cada chamado
+aberto de um lado não existe do outro. Quanto mais longa a convivência, mais
+cara fica a reconciliação — o que é um argumento a favor de decidir a §6 cedo,
+não tarde.

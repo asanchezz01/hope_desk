@@ -24,8 +24,13 @@ Atualizado em: 2026-08-15
 | 09 | Frontend de autenticação e chamados | ✅ **Concluída e validada** |
 | 10 | Frontend de analytics, relatórios e administração | ✅ **Concluída e validada** |
 | 11 | Recursos modernos e endurecimento | ✅ **Concluída e validada** |
-| 12 | Migração de dados, operação paralela e cutover | 🟡 Migração local validada; **cutover pendente** (ver `CUTOVER.md`) |
-| 13 | Publicação na VPS (deploy contínuo) | 🟡 Infra e Action prontas; ver `DEPLOY.md` |
+| 12 | Migração de dados, operação paralela e cutover | 🟡 Dados carregados na base nova da VPS (193/193, checksums conferem); **cutover pendente** (ver `CUTOVER.md`) |
+| 13 | Publicação na VPS (deploy contínuo) | ✅ No ar em `hopedesk.hopecash.tech`, publicado por Action; ver `DEPLOY.md` |
+
+> **O Flask saiu do repositório em 2026-08-15** (tag `legado-flask`), depois da
+> carga e da paridade conferida. **O serviço continua rodando** — apagar fonte
+> não desliga processo. `docs/LEGACY_CONTRACTS.md` segue sendo a referência das
+> regras, e não depende do código.
 
 ---
 
@@ -1688,7 +1693,9 @@ em endereços e banco próprios, e o Flask segue intocado sobre a base dele.
 
 | # | Pendência |
 |---|---|
-| 41 | **Proxy hosts do nginx-proxy-manager ainda não existem** (`DEPLOY.md` §4.3): os dois domínios caem no "Default Site" e não têm certificado. O DNS já aponta para a VPS. Enquanto isso, a stack só responde pelo loopback |
+| 41 | ~~Proxy hosts do nginx-proxy-manager~~ — ✅ resolvido em 2026-08-15: os dois domínios respondem por HTTPS com certificado |
+| 45 | **As duas bases divergem desde a carga de 2026-08-15.** Chamado aberto no Flask não existe na base nova e vice-versa. Quanto mais longa a convivência, mais cara a reconciliação (`CUTOVER.md` §9) |
+| 46 | `anderson.sanchez@gmail.com` (id 2) **não é superusuário** no dado migrado — é o que o legado tinha. O superusuário é `superuser@hope.com`. Promover alguém é decisão de negócio, não de migração |
 | 42 | ~~Autenticação SSH da Action por senha~~ — ✅ resolvido em 2026-08-15, e não do jeito previsto: o firewall do **provedor** descarta a porta 22 para o runner do GitHub (o `ufw` da VM já liberava, e o `auth.log` não registrava tentativa alguma). A publicação passou a rodar num runner self-hosted, que sai da VPS por 443. **Exige** manter a aprovação de PR de fork em `all_external_contributors` — o repositório é público |
 | 43 | **Não há backup automático do banco novo.** Enquanto for base de teste não há o que perder; antes do cutover precisa existir |
 | 44 | A suíte de integração não roda nesta máquina sem Docker (precisa de Postgres real); quem a executa de verdade é o CI |

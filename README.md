@@ -1,75 +1,85 @@
-# Hope Desk - Sistema de Chamados
+# Hope Desk — sistema de chamados
 
-Sistema web simples em Python (Flask) para registro e acompanhamento de chamados, com perfis de **cliente** e **técnico**.
+Registro e acompanhamento de chamados, com perfis de **cliente** e **técnico**,
+banco de horas por ciclo contratual, relatórios e trilha de auditoria.
 
-## Funcionalidades
+| | |
+|---|---|
+| API | NestJS + Prisma + PostgreSQL 16 — `backend/` |
+| App | Expo (React Native Web) — `frontend/` |
+| Produção | `https://hopedesk.hopecash.tech` · API em `https://hopedesk-api.hopecash.tech/api/v1` |
+| Publicação | GitHub Actions → runner self-hosted na VPS (`docs/DEPLOY.md`) |
 
-- Cadastro e login de usuários com perfil (cliente/técnico)
-- Abertura de chamados por clientes
-- Acompanhamento dos chamados
-- Alteração de status por técnico
-- Registro de atividades por técnico com data/hora de início e fim
-- Cálculo automático de horas trabalhadas por chamado
-- Interface responsiva com Bootstrap
-- Banco PostgreSQL
-- Deploy via Docker
+## O monólito Flask
 
-## Executar localmente
+Este projeto nasceu como um monólito Flask de 2375 linhas (`app.py` + Jinja).
+Ele foi reescrito em treze fases e **seu código foi removido do repositório em
+2026-08-15**, depois que os dados de produção foram migrados para o schema novo
+e a paridade do banco de horas foi conferida contra o próprio código legado.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
-
-Acesse: http://localhost:5000
-
-Usuário inicial (criado automaticamente ao iniciar o app):
-
-- E-mail: `superuser@hope.com`
-- Senha: valor de `SUPERUSER_PASSWORD` no arquivo `.env` (padrão: `newhope`)
-
-Configurações de e-mail no `.env`:
-
-- `MAIL_SMTP` (ex.: `smtp.gmail.com`)
-- `MAIL_PORT` (ex.: `587`)
-- `MAIL_USER`
-- `MAIL_PASS`
-- `MAIL_FROM`
-- `MAIL_USE_TLS` (`true` ou `false`)
-- `MAIL_ENABLED` (`true` ou `false`) para habilitar/desabilitar todo envio de e-mails
-
-Configurações de banco no `.env`:
-
-- `DB_HOST` (padrão: `10.1.4.82`)
-- `DB_PORT` (padrão: `5433`)
-- `DB_NAME` (padrão: `hopedesk`)
-- `DB_USER` (padrão: `postgres`)
-- `DB_PASSWORD` (padrão: `postgres`)
-- Opcional: `DATABASE_URL` (se informado, tem prioridade sobre as variáveis acima)
-
-## Executar com Docker
+Para recuperá-lo:
 
 ```bash
-docker compose up --build
+git checkout legado-flask -- app.py templates static requirements.txt
 ```
 
-## Carga inicial do banco (produção)
+A tag `legado-flask` aponta para o último commit em que ele existia. O que o
+legado ensinou sobre regras de negócio não depende dessa recuperação: está
+formalizado em **`docs/LEGACY_CONTRACTS.md`**, que é a referência a consultar
+primeiro.
 
-Depois de configurar o `.env` no servidor, execute:
+## Rodar localmente
 
 ```bash
-python scripts/carga_producao.py
+# banco de desenvolvimento (descartável)
+docker compose -f infra/docker-compose.dev.yml up -d postgres
+
+# API
+cd backend
+cp .env.example .env
+npm ci
+npx prisma migrate deploy
+npm run prisma:seed        # usuários de demonstração
+npm run start:dev          # http://localhost:3000/api/v1/docs
+
+# App Web
+cd ../frontend
+npm ci
+npm start                  # http://localhost:8081
 ```
 
-Esse script cria as tabelas no PostgreSQL e garante a criação/atualização do superusuário inicial.
+O seed cria `superuser@hope.com` com a senha `Hope@2026` (só em
+`NODE_ENV=development`; fora disso ele exige `SEED_PASSWORD` e **recusa** hosts
+que não sejam descartáveis).
 
-## Observações
+## Verificação
 
-- Para produção, altere `SECRET_KEY` em `app.py`.
+```bash
+cd backend && npm run typecheck && npm run lint && npm test && npm run test:e2e
+cd frontend && npm run typecheck && npm run lint:check && npm test && npm run build:web
+```
 
+É o mesmo conjunto que o CI roda em cada push, e o deploy só acontece depois
+que ele passa inteiro.
 
-## Notas de versionamento
+## Documentação
 
-- Recommit realizado para garantir que todos os arquivos do projeto estejam disponíveis no repositório remoto.
+| Documento | Assunto |
+|---|---|
+| `docs/LEGACY_CONTRACTS.md` | contratos formalizados do legado — hora de parede, ciclo de horas, permissões |
+| `docs/MIGRATION_STATUS.md` | estado das fases, decisões e riscos conhecidos |
+| `docs/DEPLOY.md` | publicação na VPS, proxy, diagnóstico e rollback |
+| `docs/CUTOVER.md` | migração de dados, operação paralela e desativação do Flask |
+
+## Convenções que não são negociáveis
+
+1. **Hora de parede.** Atividades trocam ISO **sem fuso**
+   (`2026-03-10T08:30:00`). Converter para UTC desloca tudo em três horas.
+2. **Dinheiro e horas** chegam como `{ value, formatted }`: calcule com `value`,
+   exiba `formatted`, nunca reparse o texto.
+3. **Autorização é do servidor.** `canEdit`/`canDelete` são dicas de UI; a API
+   recusa de qualquer forma. Recurso de outro cliente responde **404**, não 403.
+4. **Refresh rotativo.** Cada `POST /auth/refresh` invalida o anterior — o
+   cliente precisa enfileirar requisições durante a renovação.
+5. **`prisma db push` nunca.** O índice funcional `lower(name)` não é
+   representável no schema e seria perdido; use `migrate deploy`.

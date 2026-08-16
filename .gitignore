@@ -38,3 +38,6 @@ Thumbs.db
 
 # Dumps da base legada: dados reais (hashes de senha, e-mails). Nunca versionar.
 backups/
+
+# Configuração local do Claude Code: preferências desta máquina, não do projeto.
+.claude/settings.local.json

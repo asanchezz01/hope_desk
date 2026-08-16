@@ -263,8 +263,11 @@ migration destrutiva, o caminho é restaurar o dump — por isso `docs/CUTOVER.m
 
 ## 8. O que este deploy **não** faz
 
-- **não migra dado do Flask** — a base sobe vazia; a migração é `CUTOVER.md`;
-- **não desliga o Flask** — ele continua na base dele, intocado;
+- **não migra dado do Flask** — o deploy sobe a stack e nada mais. A carga
+  inicial dos dados reais foi um ato separado, feito uma vez em 2026-08-15
+  (`CUTOVER.md` §1); nenhum deploy repete isso;
+- **não desliga o Flask** — ele continua na base dele, intocado, e as duas
+  bases divergem desde a carga;
 - **não envia e-mail** — `MAIL_ENABLED=false` até configurar `MAIL_*`;
 - **não faz backup automático do banco novo.** Enquanto a base for de teste,
   não há o que perder; **antes do cutover isso precisa existir.**
