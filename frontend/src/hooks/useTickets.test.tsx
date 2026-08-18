@@ -36,6 +36,7 @@ const TICKET: Ticket = {
   technician: null,
   systemModule: null,
   activityCount: 0,
+  totalHours: 0,
 }
 
 /**

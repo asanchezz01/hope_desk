@@ -7,16 +7,23 @@ import {
   TICKET_STATUS_FILTER_LABELS,
   type TicketStatusFilter,
 } from '../src/api/tickets'
+import { toMessage } from '../src/api/to-message'
 import Button from '../src/components/Button'
+import Card from '../src/components/Card'
 import EmptyState from '../src/components/EmptyState'
 import ErrorState from '../src/components/ErrorState'
 import Input from '../src/components/Input'
 import Select from '../src/components/Select'
 import Skeleton from '../src/components/Skeleton'
+import StatTile from '../src/components/StatTile'
 import TicketCard from '../src/components/TicketCard'
+import { useToast } from '../src/components/Toast'
 import { useAuth } from '../src/context/AuthProvider'
+import { formatHours } from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
 import { useDebouncedValue } from '../src/hooks/useDebouncedValue'
+import { useMonthlyHoursSummary } from '../src/hooks/useMonthlyHoursSummary'
+import { useReportPdf } from '../src/hooks/useReports'
 import { useAvailableYears, useTicketList } from '../src/hooks/useTickets'
 import AppShell from '../src/layout/AppShell'
 import { navItemsFor } from '../src/layout/nav-items'
@@ -33,7 +40,7 @@ export default function TicketsScreen() {
   const theme = useTheme()
   const router = useRouter()
   const { user, isClient } = useAuth()
-  const { isMobile } = useBreakpoint()
+  const { isMobile, contentMaxWidth } = useBreakpoint()
 
   // Calculado uma vez: `new Date()` no corpo do componente muda de identidade a
   // cada render e invalidaria os `useMemo` que dependem dele.
@@ -97,6 +104,25 @@ export default function TicketsScreen() {
 
   const list = useTicketList(params)
   const years = useAvailableYears()
+  const toast = useToast()
+
+  // Só com mês concreto os dois números "fora do grid" fazem sentido; com
+  // "Todo o período" a consulta fica desligada.
+  const monthlySummary = useMonthlyHoursSummary({ year, month }, !allPeriods)
+  const pdf = useReportPdf()
+
+  async function downloadPdf() {
+    try {
+      await pdf.mutateAsync({
+        source: 'services',
+        params: { year, month },
+        fallbackName: `demonstrativo-servicos-${year}-${String(month).padStart(2, '0')}.pdf`,
+      })
+      toast.show('PDF gerado.', 'success')
+    } catch (caught) {
+      toast.show(toMessage(caught), 'error')
+    }
+  }
 
   // Trocar filtro precisa voltar para a primeira página: manter a página 3 ao
   // filtrar por um status com uma página só devolve uma lista vazia enganosa.
@@ -166,12 +192,70 @@ export default function TicketsScreen() {
     </View>
   )
 
+  // Cartão-resumo do dashboard do legado. Com mês concreto, os três números
+  // mensais existem; com "Todo o período" só as somas do recorte fazem sentido.
+  const summary = list.data?.summary
+  const monthlyLoading = monthlySummary.isLoading || monthlySummary.isFetching
+  const monthlyValue = (value: number | undefined) =>
+    value === undefined ? (monthlyLoading ? '…' : '—') : formatHours(value)
+
+  const summaryCard = (
+    <Card>
+      <View style={[styles.summaryRow, !isMobile && styles.summaryRowWide]}>
+        {allPeriods ? (
+          <StatTile
+            label="Total de horas do período"
+            value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
+            hint="Todo o histórico"
+          />
+        ) : (
+          <>
+            <StatTile
+              label="Total de horas do período"
+              value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
+              hint="Chamados criados no mês"
+            />
+            <StatTile
+              label="Atividades do período em chamados de outros meses"
+              value={monthlyValue(monthlySummary.data?.externalTicketActivityHours)}
+              hint={monthlyLoading ? 'Carregando…' : 'Somente lançamento no mês'}
+            />
+            <StatTile
+              label="Horas pagas no período selecionado"
+              value={monthlyValue(monthlySummary.data?.paidHoursInMonth)}
+            />
+          </>
+        )}
+      </View>
+      <View
+        accessibilityRole="summary"
+        accessibilityLabel={`Total de horas no grid: ${
+          summary ? formatHours(summary.gridTotalHours) : 'carregando'
+        }`}
+        style={styles.summaryGridTotal}
+      >
+        <Text style={[styles.summaryGridTotalLabel, { color: theme.muted }]}>
+          Total de horas no grid
+        </Text>
+        <Text style={[styles.summaryGridTotalValue, { color: theme.textPrimary }]}>
+          {summary ? formatHours(summary.gridTotalHours) : list.isLoading ? '…' : '—'}
+        </Text>
+      </View>
+    </Card>
+  )
+
   return (
     <AppShell title="Chamados" navItems={navItemsFor(user)} scroll={false}>
       <FlatList
         data={tickets}
         keyExtractor={(ticket) => String(ticket.id)}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          // `AppShell scroll={false}` entrega a região de tamanho total para a
+          // lista rolar; o recorte de largura + centralização é daqui, no
+          // container de conteúdo (uma coluna), casando com o painel de gráficos.
+          { width: '100%', maxWidth: contentMaxWidth, alignSelf: 'center' },
+        ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
           <RefreshControl
@@ -191,8 +275,19 @@ export default function TicketsScreen() {
                   ? 'Carregando…'
                   : `${total} ${total === 1 ? 'chamado' : 'chamados'}`}
               </Text>
-              <Button title="Novo chamado" onPress={() => router.push('/tickets/new')} />
+              <View style={styles.headerActions}>
+                {/* O demonstrativo é mensal; sem mês concreto não há o que exportar. */}
+                <Button
+                  title="Exportar PDF"
+                  variant="secondary"
+                  disabled={allPeriods}
+                  loading={pdf.isPending}
+                  onPress={downloadPdf}
+                />
+                <Button title="Novo chamado" onPress={() => router.push('/tickets/new')} />
+              </View>
             </View>
+            {summaryCard}
             {filters}
           </View>
         }
@@ -261,6 +356,26 @@ const styles = StyleSheet.create({
     gap: 12,
     flexWrap: 'wrap',
   },
+  headerActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  summaryRow: { gap: 10 },
+  summaryRowWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  summaryGridTotal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.25)',
+  },
+  summaryGridTotalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  summaryGridTotalValue: { fontSize: 18, fontWeight: '700' },
   count: { fontSize: 14, fontWeight: '600' },
   filters: { gap: 0 },
   filtersWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },

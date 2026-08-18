@@ -117,9 +117,14 @@ export default function AppShell({ children, title, navItems = [], scroll = true
             {children}
           </ScrollView>
         ) : (
-          <View style={[styles.content, styles.contentPlain, { maxWidth: contentMaxWidth }]}>
-            {children}
-          </View>
+          /* Região de tamanho total (flex: 1 => altura e largura contidas na
+             coluna lateral): quem traz lista própria (FlatList) precisa do
+             contorno BOUNDED para rolar. O recorte de largura + centralização
+             mora no container do próprio conteúdo, que é quem conhece o eixo.
+             `alignSelf: center` aqui estaria errado: `body` é `row`, e em row
+             o `alignSelf` rege o eixo VERTICAL e ainda encolhe a caixa ao
+             conteúdo — a FlatList ficava sem altura e quebrava com itens. */
+          <View style={styles.content}>{children}</View>
         )}
       </View>
 
@@ -214,6 +219,9 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 14 },
   navLabelActive: { fontWeight: '700' },
   content: { flex: 1 },
+  // `contentInner` vive no contentContainerStyle de um ScrollView: lá a caixa
+  // é um item de uma coluna, então `alignSelf: center` centraliza no eixo
+  // HORIZONTAL — o recorte de leitura que queremos. Reutilize no container de
+  // conteúdo de qualquer lista própria (`FlatList` da tela de chamados).
   contentInner: { padding: 16, gap: 16, width: '100%', alignSelf: 'center' },
-  contentPlain: { width: '100%', alignSelf: 'center' },
 })

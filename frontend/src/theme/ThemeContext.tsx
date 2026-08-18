@@ -54,6 +54,18 @@ export interface ThemeColors {
   chartMagnitude: string
   /** Trilho de fundo das barras, um passo acima da superfície. */
   chartTrack: string
+  /**
+   * Segunda série dos gráficos sobrepostos (a linha de horas sobre as colunas
+   * de chamados).
+   *
+   * Separada de `accent` de propósito. `accent` é o amarelo da marca
+   * (`#ffcc00`), escolhido para preenchimento e destaque; como LINHA de 2px
+   * ele reprova: 1,5:1 contra o card claro, e no escuro fica fora da banda de
+   * luminância da paleta categórica (L 0,865 contra o teto de 0,67). Estes dois
+   * degraus da mesma hue passam em TODAS as checagens do validador ao lado de
+   * `chartMagnitude` no seu modo — ver a nota em `chart-palette.ts`.
+   */
+  chartSecondary: string
 }
 
 /** Paleta do legado. Identidade da marca — não varia com o tema. */
@@ -84,6 +96,7 @@ export const lightTheme: ThemeColors = {
   text: '#1f2937',
   chartMagnitude: '#0c4e9a',
   chartTrack: '#eef1f5',
+  chartSecondary: '#8a6d00',
 }
 
 export const darkTheme: ThemeColors = {
@@ -104,6 +117,7 @@ export const darkTheme: ThemeColors = {
   text: '#f3f4f6',
   chartMagnitude: '#4f93d9',
   chartTrack: '#273244',
+  chartSecondary: '#b8880c',
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system'

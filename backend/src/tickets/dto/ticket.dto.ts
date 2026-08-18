@@ -215,6 +215,28 @@ export class TicketResponse {
   systemModule!: TicketModuleResponse | null;
   @ApiProperty({ description: 'Quantidade de atividades registradas.' })
   activityCount!: number;
+  @ApiProperty({
+    description:
+      'Soma das horas das atividades do chamado, arredondada a 2 casas (legado: ' +
+      'total_hours = round(sum(activity.duration_hours), 2)).',
+  })
+  totalHours!: number;
+}
+
+/** Totais de horas do recorte, no padrão do cartão do dashboard do legado. */
+export class TicketsPeriodSummary {
+  @ApiProperty({
+    description:
+      'Soma das horas de todos os chamados criados no período, independentemente ' +
+      'do status (legado: total_hours_sum).',
+  })
+  periodTotalHours!: number;
+  @ApiProperty({
+    description:
+      'Soma das horas dos chamados filtrados na lista, todas as páginas ' +
+      '(legado: tickets_hours_sum, o rodapé "Total no grid").',
+  })
+  gridTotalHours!: number;
 }
 
 export class PaginatedTicketsResponse {
@@ -230,4 +252,5 @@ export class PaginatedTicketsResponse {
     status: string;
     search: string | null;
   };
+  @ApiProperty({ type: TicketsPeriodSummary }) summary!: TicketsPeriodSummary;
 }

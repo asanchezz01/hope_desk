@@ -48,6 +48,8 @@ export interface Ticket {
   technician: TicketParty | null
   systemModule: TicketModule | null
   activityCount: number
+  /** Soma das horas das atividades do chamado (legado: `total_hours`). */
+  totalHours: number
 }
 
 export interface PaginatedTickets {
@@ -61,6 +63,13 @@ export interface PaginatedTickets {
     month: number | null
     status: string
     search: string | null
+  }
+  /** Totais de horas do recorte, no cartão do dashboard do legado. */
+  summary: {
+    /** Somas de horas dos chamados criados no período, todo status. */
+    periodTotalHours: number
+    /** Soma de horas dos chamados da lista filtrada, todas as páginas. */
+    gridTotalHours: number
   }
 }
 

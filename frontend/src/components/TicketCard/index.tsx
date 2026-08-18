@@ -2,6 +2,7 @@ import React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import type { Ticket } from '../../api/tickets'
+import { formatHours } from '../../domain/format'
 import { formatInstantLabel } from '../../domain/wall-clock'
 import { useTheme } from '../../theme/ThemeContext'
 import StatusBadge from '../StatusBadge'
@@ -63,6 +64,9 @@ export default function TicketCard({ ticket, onPress, showClient = true }: Ticke
           {ticket.technician ? ticket.technician.name : 'Sem técnico'}
           {ticket.activityCount > 0 &&
             ` · ${ticket.activityCount} ${ticket.activityCount === 1 ? 'atividade' : 'atividades'}`}
+        </Text>
+        <Text style={[styles.footerItem, { color: theme.muted }]}>
+          Horas {formatHours(ticket.totalHours)}
         </Text>
       </View>
     </Pressable>

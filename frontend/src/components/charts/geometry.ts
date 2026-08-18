@@ -160,3 +160,53 @@ export function arcSegments<T>(items: T[], value: (item: T) => number): ArcSegme
   }
   return segments
 }
+
+/**
+ * Duas escalas com AS MESMAS linhas de grade.
+ *
+ * Num gráfico sobreposto, chamados e horas têm eixos diferentes. Se cada um
+ * escolher seus próprios traços, o desenho ganha duas grades desencontradas e
+ * fica ilegível — e pior, o leitor não consegue nem dizer a qual eixo uma linha
+ * de grade pertence. Aqui os dois eixos são obrigados ao mesmo NÚMERO de
+ * intervalos, então há uma grade só e cada linha vale para os dois lados.
+ *
+ * O número de intervalos não é fixo: 3, 4 e 5 são testados e vence o que
+ * desperdiça menos altura nos dois eixos juntos. Fixar em 4 daria, para um
+ * máximo de 24,7 h, um topo em 40 h — quase 40% do gráfico vazio.
+ */
+export function alignedScales(
+  maxA: number,
+  maxB: number
+): { a: { max: number; ticks: number[] }; b: { max: number; ticks: number[] } } {
+  const build = (maxValue: number, intervals: number) => {
+    if (!Number.isFinite(maxValue) || maxValue <= 0) {
+      return { max: intervals, ticks: Array.from({ length: intervals + 1 }, (_, i) => i) }
+    }
+    const raw = maxValue / intervals
+    const magnitude = 10 ** Math.floor(Math.log10(raw))
+    const normalized = raw / magnitude
+    // Escada 1 / 2 / 2,5 / 5 / 10: são os passos que a pessoa divide de cabeça.
+    const nice =
+      normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10
+    const step = nice * magnitude
+    return {
+      max: step * intervals,
+      ticks: Array.from({ length: intervals + 1 }, (_, i) =>
+        // Multiplicar em vez de acumular evita o arrasto de ponto flutuante que
+        // faz um traço sair como 0,30000000000000004 no rótulo.
+        Number((i * step).toPrecision(12))
+      ),
+    }
+  }
+
+  let best: { a: ReturnType<typeof build>; b: ReturnType<typeof build>; waste: number } | null =
+    null
+  for (const intervals of [4, 5, 3]) {
+    const a = build(maxA, intervals)
+    const b = build(maxB, intervals)
+    const waste = (maxA > 0 ? a.max / maxA : 1) + (maxB > 0 ? b.max / maxB : 1)
+    if (best === null || waste < best.waste) best = { a, b, waste }
+  }
+
+  return { a: best!.a, b: best!.b }
+}

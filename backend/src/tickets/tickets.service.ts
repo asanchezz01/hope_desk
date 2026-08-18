@@ -43,6 +43,9 @@ const TICKET_INCLUDE = {
   technician: { select: { id: true, name: true, email: true } },
   systemModule: { select: { id: true, name: true, isActive: true } },
   _count: { select: { activities: true } },
+  // Início e fim das atividades, para a `totalHours` de cada chamado (legado:
+  // round(sum(activity.duration_hours), 2)) — calculada das horas de parede.
+  activities: { select: { startedAt: true, endedAt: true } },
 } satisfies Prisma.TicketInclude;
 
 type TicketWithRelations = Prisma.TicketGetPayload<{ include: typeof TICKET_INCLUDE }>;
@@ -116,6 +119,19 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
 
+    // Cartão do dashboard do legado: "horas no período" cobre TODO status dos
+    // chamados criados no recorte; "horas no grid" cobre a lista filtrada
+    // (status/busca inclusos) em todas as páginas. Os dois são somas das horas
+    // das atividades, no mesmo relógio do resto da aplicação.
+    const periodScope: Prisma.TicketWhereInput = {
+      ...(user.role === 'client' ? { clientId: user.id } : {}),
+      ...(period ? { createdAt: { gte: period.start, lt: period.end } } : {}),
+    };
+    const [gridTotalHours, periodTotalHours] = await Promise.all([
+      this.sumActivityHours(where),
+      this.sumActivityHours(periodScope),
+    ]);
+
     return {
       items: items.map(toTicketResponse),
       total,
@@ -128,7 +144,22 @@ export class TicketsService {
         status: statusFilter,
         search: search ?? null,
       },
+      summary: { periodTotalHours, gridTotalHours },
     };
+  }
+
+  /** Soma as horas das atividades de todos os chamados que casam `scope`. */
+  private async sumActivityHours(scope: Prisma.TicketWhereInput): Promise<number> {
+    const activities = await this.prisma.activity.findMany({
+      where: { ticket: scope },
+      select: { startedAt: true, endedAt: true },
+    });
+    return round2(
+      activities.reduce(
+        (total, activity) => total + activityDurationHours(activity),
+        0,
+      ),
+    );
   }
 
   /** Anos com chamados no escopo do usuário, para o seletor de período. */
@@ -439,5 +470,24 @@ function toTicketResponse(ticket: TicketWithRelations): TicketResponse {
     technician: ticket.technician,
     systemModule: ticket.systemModule,
     activityCount: ticket._count.activities,
+    totalHours: round2(
+      ticket.activities.reduce(
+        (total, activity) => total + activityDurationHours(activity),
+        0,
+      ),
+    ),
   };
+}
+
+const MS_PER_HOUR = 3_600_000;
+
+/** Duração (horas) de uma atividade, no padrão do legado: `max((ended_at − started_at)/3600, 0)`. */
+function activityDurationHours(activity: { startedAt: Date; endedAt: Date }): number {
+  return (
+    Math.max(activity.endedAt.getTime() - activity.startedAt.getTime(), 0) / MS_PER_HOUR
+  );
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

@@ -11,9 +11,8 @@ import InsightBanner from '../src/components/InsightBanner'
 import Select from '../src/components/Select'
 import Skeleton from '../src/components/Skeleton'
 import StatTile from '../src/components/StatTile'
+import ComboTimeSeries, { type SeriesPoint } from '../src/components/charts/ComboTimeSeries'
 import DonutChart from '../src/components/charts/DonutChart'
-import PairedTimeSeries from '../src/components/charts/PairedTimeSeries'
-import { type SeriesPoint } from '../src/components/charts/TimeSeriesChart'
 import { useAuth } from '../src/context/AuthProvider'
 import {
   countBy,
@@ -493,17 +492,19 @@ function Dashboard({
               ? 'Ritmo do período, dia a dia'
               : 'Ritmo do período, mês a mês'
           }
-          subtitle="Mesmo eixo de tempo nos dois painéis; o cursor atravessa os dois"
+          subtitle="Duas escalas: chamados à esquerda, horas à direita"
           basis={wide ? 480 : undefined}
         >
-          <PairedTimeSeries
+          <ComboTimeSeries
             countPoints={bucketTickets}
             countLabel="Chamados abertos"
+            countAxisLabel="Chamados"
             countColor={theme.chartMagnitude}
             formatCount={formatInteger}
             amountPoints={bucketHours}
             amountLabel="Horas trabalhadas"
-            amountColor={theme.accent}
+            amountAxisLabel="Horas"
+            amountColor={theme.chartSecondary}
             formatAmount={hours}
             selectedKey={filters.bucket}
             onSelect={(key) => onToggle('bucket', key)}
@@ -515,14 +516,16 @@ function Dashboard({
         title="Tendência — últimos 12 meses"
         subtitle="Fora do recorte: toque num mês para abrir o painel daquele mês"
       >
-        <PairedTimeSeries
+        <ComboTimeSeries
           countPoints={trendTickets}
           countLabel="Chamados abertos"
+          countAxisLabel="Chamados"
           countColor={theme.chartMagnitude}
           formatCount={formatInteger}
           amountPoints={trendHours}
           amountLabel="Horas trabalhadas"
-          amountColor={theme.accent}
+          amountAxisLabel="Horas"
+          amountColor={theme.chartSecondary}
           formatAmount={hours}
           onSelect={(key) => {
             const [pickedYear, pickedMonth] = key.split('-').map(Number)
@@ -532,7 +535,11 @@ function Dashboard({
       </ChartCard>
 
       <View style={[styles.grid, wide && styles.gridWide]}>
-        <ChartCard title="Chamados por módulo" subtitle="Toque para recortar" basis={wide ? 330 : undefined}>
+        <ChartCard
+          title="Chamados por módulo"
+          subtitle="Toque para recortar"
+          basis={wide ? 330 : undefined}
+        >
           <BarList
             items={moduleItems}
             selectedKey={filters.module}
@@ -540,7 +547,11 @@ function Dashboard({
           />
         </ChartCard>
 
-        <ChartCard title="Horas por técnico" subtitle="Toque para recortar" basis={wide ? 330 : undefined}>
+        <ChartCard
+          title="Horas por técnico"
+          subtitle="Toque para recortar"
+          basis={wide ? 330 : undefined}
+        >
           <BarList
             items={techItems}
             selectedKey={filters.tech}
@@ -549,7 +560,11 @@ function Dashboard({
         </ChartCard>
 
         {!isClient && (
-          <ChartCard title="Chamados por cliente" subtitle="Toque para recortar" basis={wide ? 330 : undefined}>
+          <ChartCard
+            title="Chamados por cliente"
+            subtitle="Toque para recortar"
+            basis={wide ? 330 : undefined}
+          >
             <BarList
               items={clientItems}
               selectedKey={filters.client}
