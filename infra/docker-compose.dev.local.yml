@@ -1,0 +1,14 @@
+# Override LOCAL de build (workaround) para salir de la CDN Debian corrupta.
+# Combina con el compose principal asi:
+#   docker compose -f infra/docker-compose.dev.yml \
+#                  -f infra/docker-compose.dev.local.yml up -d
+#
+# Solo apunte el backend al Dockerfile local sin apt-get. No toca ningun
+# archivo commitado; se puede borrar cuando quieras.
+name: hope-desk-dev
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.dev.local

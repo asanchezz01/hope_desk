@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 
 import { formatInteger, formatPercent } from '../../domain/format'
 import { statusLabel } from '../../domain/ticket-status'
-import { useTheme } from '../../theme/ThemeContext'
+import { useIsDark, useTheme } from '../../theme/ThemeContext'
 import { statusChartColor } from '../../theme/chart-palette'
 import EmptyState from '../EmptyState'
 
@@ -33,6 +33,7 @@ interface StatusBreakdownProps {
  */
 export default function StatusBreakdown({ slices }: StatusBreakdownProps) {
   const theme = useTheme()
+  const isDark = useIsDark()
 
   const total = slices.reduce((sum, slice) => sum + slice.count, 0)
 
@@ -58,7 +59,7 @@ export default function StatusBreakdown({ slices }: StatusBreakdownProps) {
               styles.segment,
               {
                 flexGrow: slice.count,
-                backgroundColor: statusChartColor(slice.key),
+                backgroundColor: statusChartColor(slice.key, isDark),
                 // Vão da cor da superfície entre segmentos — não borda.
                 marginLeft: index === 0 ? 0 : 2,
               },
@@ -70,7 +71,9 @@ export default function StatusBreakdown({ slices }: StatusBreakdownProps) {
       <View style={styles.legend}>
         {slices.map((slice) => (
           <View key={slice.key} style={styles.legendItem}>
-            <View style={[styles.swatch, { backgroundColor: statusChartColor(slice.key) }]} />
+            <View
+              style={[styles.swatch, { backgroundColor: statusChartColor(slice.key, isDark) }]}
+            />
             <Text style={[styles.legendLabel, { color: theme.textSecondary }]}>
               {slice.label || statusLabel(slice.key)}
             </Text>

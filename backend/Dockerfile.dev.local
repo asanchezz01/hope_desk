@@ -1,0 +1,31 @@
+# DOCKERFILE LOCAL TEMPORAL (workaround) — solo para levantar la stack de dev
+# cuando la CDN geo de Debian sirve un libk5crypto3 corrupto
+# (apt: "Hash Sum mismatch" en bookworm/main).
+#
+# Identico a Dockerfile.dev EXCEPTO que NO corre apt-get: `curl`/`openssl` lo
+# unica que los usaba era el HEALTHCHECK, y la API no los necesita en runtime.
+# Reemplaza el healthcheck por fetch() global de Node 20.
+#
+# Este archivo es descartable: borrarlo y volver al Dockerfile.dev una vez que
+# el mirror deje de servir el paquete corrupto.
+FROM node:20-slim
+
+WORKDIR /app
+
+# Dependencias primero, para aprovechar cache de layer.
+COPY package*.json ./
+RUN npm ci
+
+# Schema precisa existir antes del generate.
+COPY prisma ./prisma/
+RUN npx prisma generate
+
+COPY . .
+
+ENV NODE_ENV=development
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD node -e "fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || exit 1
+
+CMD ["npm", "run", "start:dev"]

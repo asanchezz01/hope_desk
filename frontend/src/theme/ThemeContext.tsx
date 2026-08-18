@@ -168,3 +168,14 @@ export function useThemeMode(): Omit<ThemeContextValue, 'colors'> {
   const { mode, setMode, isDark } = useContext(ThemeContext)
   return { mode, setMode, isDark }
 }
+
+/**
+ * `true` no tema escuro.
+ *
+ * Existe para os gráficos: as cores de status precisam de degraus mais claros
+ * sobre o card escuro (ver `chart-palette.ts`), e um componente de gráfico não
+ * deveria puxar `mode` e `setMode` só para descobrir isso.
+ */
+export function useIsDark(): boolean {
+  return useContext(ThemeContext).isDark
+}
