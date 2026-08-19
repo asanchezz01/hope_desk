@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { Ticket } from '../../api/tickets'
 import { formatHours } from '../../domain/format'
 import { formatInstantLabel } from '../../domain/wall-clock'
-import { useTheme } from '../../theme/ThemeContext'
+import { useIsDark, useTheme } from '../../theme/ThemeContext'
+import { statusChartColor } from '../../theme/chart-palette'
 import StatusBadge from '../StatusBadge'
 
 interface TicketCardProps {
@@ -16,6 +17,10 @@ interface TicketCardProps {
 
 export default function TicketCard({ ticket, onPress, showClient = true }: TicketCardProps) {
   const theme = useTheme()
+  const isDark = useIsDark()
+  // A cor da aresta esquerda é a do status: a lista se lê por cor antes do
+  // texto, e a mesma paleta que já pinta o badge e o painel.
+  const statusColor = statusChartColor(ticket.status, isDark)
 
   return (
     <Pressable
@@ -25,7 +30,12 @@ export default function TicketCard({ ticket, onPress, showClient = true }: Ticke
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: theme.cardBg, borderColor: theme.border },
+        {
+          backgroundColor: theme.cardBg,
+          borderColor: theme.border,
+          borderLeftWidth: 4,
+          borderLeftColor: statusColor,
+        },
         pressed && styles.pressed,
       ]}
     >
