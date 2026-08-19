@@ -1,0 +1,72 @@
+# Promove (ou cria) um superusuário na base de PRODUÇÃO.
+#
+# Existe porque não há SSH: o firewall do provedor descarta a porta 22 para
+# quem não é o IP do escritório (ver docs/DEPLOY.md §2). O runner self-hosted é
+# o único caminho até a VPS — este workflow reaproveita o mesmo runner do
+# deploy para rodar `dist/scripts/create-superuser.js`, que já é idempotente.
+#
+# A senha vem do secret ADMIN_BOOTSTRAP_PASSWORD, nunca de um input: input de
+# workflow aparece em claro no log, e log de repositório público é público. O
+# secret é mascarado. Ela é provisória de qualquer forma — o script marca
+# `mustChangePassword` e a API bloqueia tudo até a troca.
+#
+# Quando o usuário JÁ EXISTE, a senha não é tocada: o script só promove. Marque
+# `regravar_senha` apenas no caso "perdi o acesso".
+name: Superusuário (produção)
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: E-mail do usuário a promover (ou criar)
+        required: true
+      nome:
+        description: Nome, usado só se o usuário ainda não existir
+        required: true
+        default: Superusuário
+      regravar_senha:
+        description: Regravar a senha com o secret ADMIN_BOOTSTRAP_PASSWORD
+        type: boolean
+        default: false
+
+# Não concorre com um deploy: os dois mexem na mesma stack.
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  promover:
+    name: Promover na VPS
+    runs-on: [self-hosted, hopedesk-vps]
+    timeout-minutes: 5
+    environment:
+      name: producao
+      url: https://hopedesk.hopecash.tech
+
+    steps:
+      - name: Executar create-superuser
+        env:
+          # Via env, não interpolados no script: input não vira comando.
+          ADMIN_EMAIL: ${{ inputs.email }}
+          ADMIN_NAME: ${{ inputs.nome }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+          REGRAVAR: ${{ inputs.regravar_senha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ADMIN_PASSWORD:-}" ]; then
+            echo "Defina o secret ADMIN_BOOTSTRAP_PASSWORD (8+ caracteres)."
+            echo "Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+          # Promover não usa a senha, mas o script exige a variável.
+          ARGS=""
+          if [ "$REGRAVAR" = "true" ]; then
+            ARGS="--reset-password"
+          fi
+
+          cd /opt/hopedesk
+          # `-T`: o runner não tem TTY.
+          docker compose -f docker-compose.prod.yml exec -T \
+            -e ADMIN_EMAIL -e ADMIN_NAME -e ADMIN_PASSWORD \
+            api node dist/scripts/create-superuser.js $ARGS
