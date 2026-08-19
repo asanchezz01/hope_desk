@@ -64,6 +64,8 @@ describe('Documento Swagger', () => {
       '/api/v1/hours-bank',
       '/api/v1/hours-bank/monthly-summary',
       '/api/v1/parameters',
+      // Pública e sem token: a tela de login exibe a logo antes de autenticar.
+      '/api/v1/parameters/logo',
       '/api/v1/parameters/public',
       '/api/v1/payments',
       '/api/v1/payments/{id}',

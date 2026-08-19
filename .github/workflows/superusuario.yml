@@ -5,13 +5,15 @@
 # o único caminho até a VPS — este workflow reaproveita o mesmo runner do
 # deploy para rodar `dist/scripts/create-superuser.js`, que já é idempotente.
 #
-# A senha vem do secret ADMIN_BOOTSTRAP_PASSWORD, nunca de um input: input de
-# workflow aparece em claro no log, e log de repositório público é público. O
-# secret é mascarado. Ela é provisória de qualquer forma — o script marca
-# `mustChangePassword` e a API bloqueia tudo até a troca.
+# Quando o usuário JÁ EXISTE, a senha não é tocada: o script só promove. Esse
+# é o caso comum, e ele não precisa de secret nenhum — a variável exigida pelo
+# script recebe um valor descartável gerado na própria VPS.
 #
-# Quando o usuário JÁ EXISTE, a senha não é tocada: o script só promove. Marque
-# `regravar_senha` apenas no caso "perdi o acesso".
+# Para CRIAR um usuário, ou para o caso "perdi o acesso" (`regravar_senha`), a
+# senha vem do secret ADMIN_BOOTSTRAP_PASSWORD — nunca de um input: input de
+# workflow aparece em claro no log, e log de repositório público é público. O
+# secret é mascarado. Ela é provisória de qualquer forma: o script marca
+# `mustChangePassword` e a API bloqueia tudo até a troca.
 name: Superusuário (produção)
 
 on:
@@ -53,20 +55,42 @@ jobs:
           REGRAVAR: ${{ inputs.regravar_senha }}
         run: |
           set -euo pipefail
-          if [ -z "${ADMIN_PASSWORD:-}" ]; then
-            echo "Defina o secret ADMIN_BOOTSTRAP_PASSWORD (8+ caracteres)."
-            echo "Settings -> Secrets and variables -> Actions."
-            exit 1
-          fi
-
-          # Promover não usa a senha, mas o script exige a variável.
           ARGS=""
           if [ "$REGRAVAR" = "true" ]; then
             ARGS="--reset-password"
+            if [ -z "${ADMIN_PASSWORD:-}" ]; then
+              echo "regravar_senha exige o secret ADMIN_BOOTSTRAP_PASSWORD (8+ caracteres)."
+              echo "Settings -> Secrets and variables -> Actions."
+              exit 1
+            fi
+          fi
+
+          # Promover não usa a senha, mas o script exige a variável preenchida.
+          # Sem secret, um valor descartável: se o usuário já existir, ele é
+          # ignorado. Se NÃO existir, o script cria a conta com esta senha
+          # aleatória — que ninguém conhece. É por isso que o passo seguinte
+          # distingue os dois casos e falha no segundo.
+          if [ -z "${ADMIN_PASSWORD:-}" ]; then
+            ADMIN_PASSWORD="$(openssl rand -hex 24)"
+            export ADMIN_PASSWORD
+            DESCARTAVEL=1
+          else
+            DESCARTAVEL=0
           fi
 
           cd /opt/hopedesk
           # `-T`: o runner não tem TTY.
-          docker compose -f docker-compose.prod.yml exec -T \
+          SAIDA=$(docker compose -f docker-compose.prod.yml exec -T \
             -e ADMIN_EMAIL -e ADMIN_NAME -e ADMIN_PASSWORD \
-            api node dist/scripts/create-superuser.js $ARGS
+            api node dist/scripts/create-superuser.js $ARGS)
+          echo "$SAIDA"
+
+          # Conta recém-criada com a senha descartável = ninguém consegue
+          # entrar. Falhar aqui é o que impede isso de passar despercebido.
+          if [ "$DESCARTAVEL" = "1" ] && printf '%s' "$SAIDA" | grep -q 'criado'; then
+            echo
+            echo "O usuário NÃO existia e foi criado com uma senha aleatória que"
+            echo "ninguém conhece. Defina o secret ADMIN_BOOTSTRAP_PASSWORD e rode"
+            echo "de novo com regravar_senha marcado."
+            exit 1
+          fi
