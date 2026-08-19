@@ -29,7 +29,8 @@ import AppShell from '../src/layout/AppShell'
 import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
 import { readTicketFilters, saveTicketFilters } from '../src/storage/preferences'
-import { useTheme } from '../src/theme/ThemeContext'
+import { useIsDark, useTheme } from '../src/theme/ThemeContext'
+import { statusChartColor } from '../src/theme/chart-palette'
 
 const PAGE_SIZE = 25
 
@@ -38,6 +39,7 @@ const ALL_PERIODS = 0
 
 export default function TicketsScreen() {
   const theme = useTheme()
+  const isDark = useIsDark()
   const router = useRouter()
   const { user, isClient } = useAuth()
   const { isMobile, contentMaxWidth } = useBreakpoint()
@@ -204,6 +206,7 @@ export default function TicketsScreen() {
       <View style={[styles.summaryRow, !isMobile && styles.summaryRowWide]}>
         {allPeriods ? (
           <StatTile
+            accent={theme.chartMagnitude}
             label="Total de horas do período"
             value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
             hint="Todo o histórico"
@@ -211,16 +214,19 @@ export default function TicketsScreen() {
         ) : (
           <>
             <StatTile
+              accent={theme.chartMagnitude}
               label="Total de horas do período"
               value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
               hint="Chamados criados no mês"
             />
             <StatTile
+              accent={statusChartColor('em_andamento', isDark)}
               label="Atividades do período em chamados de outros meses"
               value={monthlyValue(monthlySummary.data?.externalTicketActivityHours)}
               hint={monthlyLoading ? 'Carregando…' : 'Somente lançamento no mês'}
             />
             <StatTile
+              accent={statusChartColor('resolvido', isDark)}
               label="Horas pagas no período selecionado"
               value={monthlyValue(monthlySummary.data?.paidHoursInMonth)}
             />
