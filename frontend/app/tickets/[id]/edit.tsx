@@ -85,7 +85,7 @@ export default function EditTicket() {
 
   if (!validId) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
         <EmptyState
           title="Chamado inválido"
           description="O endereço acessado não corresponde a um chamado."
@@ -99,7 +99,7 @@ export default function EditTicket() {
   if (user && !canEditTicket(user)) {
     // Esconder a tela é conveniência; a API recusaria o PATCH de qualquer forma.
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
         <EmptyState
           title="Sem permissão"
           description="Apenas técnicos podem editar chamados."
@@ -112,7 +112,7 @@ export default function EditTicket() {
 
   if (ticket.isLoading) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
         <Card>
           <Skeleton height={20} width="50%" />
           <View style={styles.gap} />
@@ -124,7 +124,7 @@ export default function EditTicket() {
 
   if (ticket.isError || !ticket.data) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
         <ErrorState error={ticket.error} onRetry={() => void ticket.refetch()} />
       </AppShell>
     )
@@ -166,7 +166,7 @@ export default function EditTicket() {
   }
 
   return (
-    <AppShell title={`Editar chamado #${ticketId}`} navItems={navItemsFor(user)}>
+    <AppShell title={`Editar chamado #${ticketId}`} navItems={navItemsFor(user)} width="form">
       <Card>
         <Input
           label="Título"

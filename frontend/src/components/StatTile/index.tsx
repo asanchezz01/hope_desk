@@ -1,5 +1,6 @@
 import React from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import type { StyleProp, ViewStyle } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
 
@@ -17,6 +18,15 @@ interface StatTileProps {
   hero?: boolean
   /** Indicadores fora do recorte de período; recebem fundo recessivo. */
   muted?: boolean
+  /**
+   * Escape para o contêiner em COLUNA.
+   *
+   * O `flexBasis: 150` abaixo pressupõe uma LINHA, que é como o painel e os
+   * relatórios usam o componente. Empilhado numa coluna, esse mesmo valor vira
+   * ALTURA e o quadro fica esticado com metade dele vazia. Quem empilha passa
+   * `{ flexBasis: 'auto' }` por aqui.
+   */
+  style?: StyleProp<ViewStyle>
 }
 
 /**
@@ -32,6 +42,7 @@ export default function StatTile({
   accent,
   hero = false,
   muted = false,
+  style,
 }: StatTileProps) {
   const theme = useTheme()
 
@@ -46,6 +57,7 @@ export default function StatTile({
           borderColor: theme.border,
         },
         hero && styles.tileHero,
+        style,
       ]}
     >
       {/* Faixa de acento na aresta, como no painel antigo: identifica o grupo

@@ -1,5 +1,6 @@
+import { FontAwesome6 } from '@expo/vector-icons'
 import React from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
@@ -14,6 +15,13 @@ interface ButtonProps {
   loading?: boolean
   /** Ocupa toda a largura disponível. */
   full?: boolean
+  /**
+   * Glyph do FontAwesome6 à esquerda do texto. Decorativo: o rótulo continua
+   * sendo o que o leitor de tela anuncia, e nenhum botão fica só com ícone.
+   */
+  icon?: React.ComponentProps<typeof FontAwesome6>['name']
+  /** Lado do ícone. À direita para avançar ("Próxima ›"), que é o sentido lido. */
+  iconPosition?: 'left' | 'right'
   /** Sobrescreve o texto lido por leitores de tela. */
   accessibilityLabel?: string
 }
@@ -25,6 +33,8 @@ export default function Button({
   disabled = false,
   loading = false,
   full = false,
+  icon,
+  iconPosition = 'left',
   accessibilityLabel,
 }: ButtonProps) {
   const theme = useTheme()
@@ -75,7 +85,10 @@ export default function Button({
       {loading ? (
         <ActivityIndicator accessibilityLabel="Processando" color={textColor} />
       ) : (
-        <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+        <View style={[styles.content, iconPosition === 'right' && styles.contentReversed]}>
+          {icon && <FontAwesome6 name={icon} size={14} color={textColor} />}
+          <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+        </View>
       )}
     </Pressable>
   )
@@ -93,6 +106,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
+  content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  contentReversed: { flexDirection: 'row-reverse' },
   full: { alignSelf: 'stretch' },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },

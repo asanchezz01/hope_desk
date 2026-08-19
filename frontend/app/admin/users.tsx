@@ -16,6 +16,7 @@ import { useAuth } from '../../src/context/AuthProvider'
 import { useCreateUser, useDeleteUser, useUsers } from '../../src/hooks/useAdmin'
 import AppShell from '../../src/layout/AppShell'
 import { navItemsFor } from '../../src/layout/nav-items'
+import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 const PASSWORD_MIN_LENGTH = 6
@@ -25,6 +26,7 @@ export default function AdminUsers() {
   const theme = useTheme()
   const toast = useToast()
   const { user, isSuperuser } = useAuth()
+  const { isMobile } = useBreakpoint()
 
   const [roleFilter, setRoleFilter] = useState<UserRole | typeof ALL_ROLES>(ALL_ROLES)
   const [page, setPage] = useState(1)
@@ -121,58 +123,74 @@ export default function AdminUsers() {
           <Button
             title={showForm ? 'Fechar' : 'Novo usuário'}
             variant={showForm ? 'secondary' : 'primary'}
+            icon={showForm ? 'xmark' : 'user-plus'}
             onPress={() => setShowForm((open) => !open)}
           />
         </View>
 
         {showForm && (
           <View style={[styles.form, { borderTopColor: theme.border }]}>
-            <Input
-              label="Nome"
-              value={name}
-              onChangeText={setName}
-              error={errors.name}
-              disabled={createUser.isPending}
-            />
-            <Input
-              label="E-mail"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email}
-              disabled={createUser.isPending}
-            />
-            <Input
-              label="Senha inicial"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              hint={`Mínimo de ${PASSWORD_MIN_LENGTH} caracteres.`}
-              error={errors.password}
-              disabled={createUser.isPending}
-            />
-            <Select
-              label="Perfil"
-              value={role}
-              options={[
-                { value: 'client', label: 'Cliente' },
-                { value: 'technician', label: 'Técnico' },
-              ]}
-              onChange={setRole}
-              disabled={createUser.isPending}
-            />
-            <Select
-              label="Exigir troca de senha no primeiro acesso"
-              value={mustChangePassword ? 'sim' : 'nao'}
-              options={[
-                { value: 'sim', label: 'Sim' },
-                { value: 'nao', label: 'Não' },
-              ]}
-              onChange={(value) => setMustChangePassword(value === 'sim')}
-              disabled={createUser.isPending}
-            />
+            {/* Cinco campos empilhados deixavam metade da tela vazia no desktop
+                e obrigavam a rolar para chegar em "Criar usuário". Em duas
+                colunas o formulário cabe inteiro sem rolagem. */}
+            <View style={[styles.formFields, !isMobile && styles.formFieldsWide]}>
+              <View style={!isMobile ? styles.formField : undefined}>
+                <Input
+                  label="Nome"
+                  value={name}
+                  onChangeText={setName}
+                  error={errors.name}
+                  disabled={createUser.isPending}
+                />
+              </View>
+              <View style={!isMobile ? styles.formField : undefined}>
+                <Input
+                  label="E-mail"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  error={errors.email}
+                  disabled={createUser.isPending}
+                />
+              </View>
+              <View style={!isMobile ? styles.formField : undefined}>
+                <Input
+                  label="Senha inicial"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  hint={`Mínimo de ${PASSWORD_MIN_LENGTH} caracteres.`}
+                  error={errors.password}
+                  disabled={createUser.isPending}
+                />
+              </View>
+              <View style={!isMobile ? styles.formField : undefined}>
+                <Select
+                  label="Perfil"
+                  value={role}
+                  options={[
+                    { value: 'client', label: 'Cliente' },
+                    { value: 'technician', label: 'Técnico' },
+                  ]}
+                  onChange={setRole}
+                  disabled={createUser.isPending}
+                />
+              </View>
+              <View style={!isMobile ? styles.formField : undefined}>
+                <Select
+                  label="Exigir troca de senha no primeiro acesso"
+                  value={mustChangePassword ? 'sim' : 'nao'}
+                  options={[
+                    { value: 'sim', label: 'Sim' },
+                    { value: 'nao', label: 'Não' },
+                  ]}
+                  onChange={(value) => setMustChangePassword(value === 'sim')}
+                  disabled={createUser.isPending}
+                />
+              </View>
+            </View>
 
             {!isSuperuser && (
               <Text style={[styles.note, { color: theme.muted }]}>
@@ -225,20 +243,47 @@ export default function AdminUsers() {
               key={item.id}
               style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
             >
-              <View style={styles.rowInfo}>
-                <Text style={[styles.rowName, { color: theme.textPrimary }]}>{item.name}</Text>
-                <Text style={[styles.rowMeta, { color: theme.textSecondary }]}>{item.email}</Text>
-                <Text style={[styles.rowMeta, { color: theme.muted }]}>
+              {/* Em tela larga a linha vira COLUNAS — nome, e-mail, perfil —, em
+                  vez de um bloco à esquerda com um vazio de 700px até o botão.
+                  No celular volta a empilhar, que é onde o bloco faz sentido. */}
+              <View style={[styles.rowInfo, !isMobile && styles.rowInfoWide]}>
+                <Text
+                  style={[
+                    styles.rowName,
+                    { color: theme.textPrimary },
+                    !isMobile && styles.colName,
+                  ]}
+                >
+                  {item.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.rowMeta,
+                    { color: theme.textSecondary },
+                    !isMobile && styles.colEmail,
+                  ]}
+                >
+                  {item.email}
+                </Text>
+                <Text style={[styles.rowMeta, { color: theme.muted }, !isMobile && styles.colRole]}>
                   {item.role === 'technician' ? 'Técnico' : 'Cliente'}
                   {item.isSuperuser && ' · Superusuário'}
                   {item.mustChangePassword && ' · Troca de senha pendente'}
                 </Text>
               </View>
               {/* A API recusa excluir o próprio usuário; esconder o botão só
-                  evita o erro previsível. */}
-              {item.id !== user?.id && (
-                <Button title="Excluir" variant="danger" onPress={() => setToDelete(item)} />
-              )}
+                  evita o erro previsível. A caixa fica: sem ela, a linha do
+                  próprio usuário desalinha as colunas de todas as outras. */}
+              <View style={styles.rowAction}>
+                {item.id !== user?.id && (
+                  <Button
+                    title="Excluir"
+                    variant="danger"
+                    icon="trash"
+                    onPress={() => setToDelete(item)}
+                  />
+                )}
+              </View>
             </View>
           ))}
 
@@ -247,6 +292,7 @@ export default function AdminUsers() {
               <Button
                 title="Anterior"
                 variant="secondary"
+                icon="chevron-left"
                 disabled={page <= 1}
                 onPress={() => setPage((current) => Math.max(1, current - 1))}
               />
@@ -256,6 +302,8 @@ export default function AdminUsers() {
               <Button
                 title="Próxima"
                 variant="secondary"
+                icon="chevron-right"
+                iconPosition="right"
                 disabled={page >= list.data.totalPages}
                 onPress={() => setPage((current) => current + 1)}
               />
@@ -279,13 +327,28 @@ export default function AdminUsers() {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' },
-  filterField: { flexGrow: 1, flexBasis: 180 },
+  // Um seletor de três opções não fica melhor com 880px; o teto o mantém do
+  // tamanho do conteúdo e deixa o botão perto dele.
+  filterField: { flexGrow: 1, flexBasis: 180, maxWidth: 320 },
   form: { marginTop: 8, paddingTop: 16, borderTopWidth: 1 },
+  formFields: { gap: 0 },
+  // `column-gap` só: o espaçamento vertical entre campos já vem do próprio
+  // `Input`/`Select`, e somar `row-gap` abriria um vão duplo entre as linhas.
+  formFieldsWide: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
+  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
+  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
+  // estilo é aplicado condicionalmente, como em `analytics`.
+  formField: { flexGrow: 1, flexBasis: 240, minWidth: 0 },
   note: { fontSize: 12, marginBottom: 10, lineHeight: 17 },
   error: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rowInfo: { flex: 1, gap: 2 },
+  rowInfoWide: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  rowAction: { minWidth: 116, alignItems: 'flex-end' },
+  colName: { flex: 2, minWidth: 0 },
+  colEmail: { flex: 3, minWidth: 0 },
+  colRole: { flex: 2, minWidth: 0 },
   rowName: { fontSize: 15, fontWeight: '600' },
   rowMeta: { fontSize: 12 },
   pagination: {

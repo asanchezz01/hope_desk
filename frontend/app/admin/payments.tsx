@@ -109,7 +109,7 @@ export default function AdminPayments() {
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Registrar pagamento</Text>
         <View style={[styles.fields, !isMobile && styles.fieldsWide]}>
-          <View style={styles.field}>
+          <View style={!isMobile ? styles.field : undefined}>
             <DateField
               label="Data"
               value={paidAt}
@@ -118,7 +118,7 @@ export default function AdminPayments() {
               disabled={createPayment.isPending}
             />
           </View>
-          <View style={styles.field}>
+          <View style={!isMobile ? styles.field : undefined}>
             <Input
               label="Valor (R$)"
               value={amount}
@@ -129,7 +129,7 @@ export default function AdminPayments() {
               disabled={createPayment.isPending}
             />
           </View>
-          <View style={styles.field}>
+          <View style={!isMobile ? styles.field : undefined}>
             <Input
               label="Horas pagas"
               value={paidHours}
@@ -151,6 +151,7 @@ export default function AdminPayments() {
         <View style={styles.actions}>
           <Button
             title="Registrar"
+            icon="plus"
             onPress={() => void handleCreate()}
             loading={createPayment.isPending}
           />
@@ -160,7 +161,7 @@ export default function AdminPayments() {
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Filtrar período</Text>
         <View style={[styles.fields, !isMobile && styles.fieldsWide]}>
-          <View style={styles.field}>
+          <View style={!isMobile ? styles.field : undefined}>
             <DateField
               label="De"
               value={from}
@@ -170,7 +171,7 @@ export default function AdminPayments() {
               }}
             />
           </View>
-          <View style={styles.field}>
+          <View style={!isMobile ? styles.field : undefined}>
             <DateField
               label="Até"
               value={to}
@@ -217,15 +218,24 @@ export default function AdminPayments() {
               key={item.id}
               style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
             >
-              <View style={styles.rowInfo}>
+              {/* Valor e data como duas colunas em tela larga: empilhados, o
+                  olho volta ao começo da linha para ler a data. */}
+              <View style={[styles.rowInfo, !isMobile && styles.rowInfoWide]}>
                 <Text style={[styles.rowValue, { color: theme.textPrimary }]}>
                   R$ {item.amount.formatted}
                 </Text>
-                <Text style={[styles.rowMeta, { color: theme.textSecondary }]}>
+                <Text
+                  style={[styles.rowMeta, { color: theme.textSecondary }, !isMobile && styles.grow]}
+                >
                   {formatIsoDate(item.paidAt)} · {item.paidHours.formatted} h
                 </Text>
               </View>
-              <Button title="Excluir" variant="danger" onPress={() => setToDelete(item)} />
+              <Button
+                title="Excluir"
+                variant="danger"
+                icon="trash"
+                onPress={() => setToDelete(item)}
+              />
             </View>
           ))}
 
@@ -233,6 +243,7 @@ export default function AdminPayments() {
             <View style={styles.pagination}>
               <Button
                 title="Anterior"
+                icon="chevron-left"
                 variant="secondary"
                 disabled={page <= 1}
                 onPress={() => setPage((current) => Math.max(1, current - 1))}
@@ -242,6 +253,8 @@ export default function AdminPayments() {
               </Text>
               <Button
                 title="Próxima"
+                icon="chevron-right"
+                iconPosition="right"
                 variant="secondary"
                 disabled={page >= list.data.totalPages}
                 onPress={() => setPage((current) => current + 1)}
@@ -268,13 +281,18 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
   fields: { gap: 0 },
   fieldsWide: { flexDirection: 'row', gap: 12 },
-  field: { flexGrow: 1, flexBasis: 160 },
+  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
+  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
+  // estilo é aplicado condicionalmente, como em `analytics`.
+  field: { flexGrow: 1, flexBasis: 160, minWidth: 0 },
   error: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rowInfo: { flex: 1, gap: 2 },
+  rowInfoWide: { flexDirection: 'row', alignItems: 'baseline', gap: 16 },
   rowValue: { fontSize: 15, fontWeight: '700' },
+  grow: { flex: 1 },
   rowMeta: { fontSize: 12 },
   pagination: {
     flexDirection: 'row',

@@ -21,12 +21,14 @@ import {
 } from '../../src/hooks/useAdmin'
 import AppShell from '../../src/layout/AppShell'
 import { navItemsFor } from '../../src/layout/nav-items'
+import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 export default function AdminModules() {
   const theme = useTheme()
   const toast = useToast()
   const { user, isSuperuser } = useAuth()
+  const { isMobile } = useBreakpoint()
 
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -95,23 +97,31 @@ export default function AdminModules() {
   return (
     <AppShell title="Módulos do sistema" navItems={navItemsFor(user)}>
       <Card>
-        <Input
-          label="Novo módulo"
-          placeholder="Nome do módulo"
-          value={name}
-          onChangeText={setName}
-          error={error ?? undefined}
-          hint="O nome é único, sem diferenciar maiúsculas de minúsculas."
-          disabled={createModule.isPending}
-          returnKeyType="done"
-          onSubmitEditing={() => void handleCreate()}
-        />
-        <View style={styles.actions}>
-          <Button
-            title="Adicionar"
-            onPress={() => void handleCreate()}
-            loading={createModule.isPending}
-          />
+        {/* Campo e botão na mesma linha no desktop: um input de largura inteira
+            com o botão sozinho embaixo desperdiça a linha e afasta a ação do
+            campo que ela envia. No celular volta a empilhar. */}
+        <View style={[styles.create, !isMobile && styles.createWide]}>
+          <View style={!isMobile ? styles.createField : undefined}>
+            <Input
+              label="Novo módulo"
+              placeholder="Nome do módulo"
+              value={name}
+              onChangeText={setName}
+              error={error ?? undefined}
+              hint="O nome é único, sem diferenciar maiúsculas de minúsculas."
+              disabled={createModule.isPending}
+              returnKeyType="done"
+              onSubmitEditing={() => void handleCreate()}
+            />
+          </View>
+          <View style={[styles.actions, !isMobile && styles.createAction]}>
+            <Button
+              title="Adicionar"
+              icon="plus"
+              onPress={() => void handleCreate()}
+              loading={createModule.isPending}
+            />
+          </View>
         </View>
       </Card>
 
@@ -141,7 +151,9 @@ export default function AdminModules() {
               key={item.id}
               style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
             >
-              <View style={styles.rowInfo}>
+              {/* Nome e situação lado a lado quando há largura: empilhados, a
+                  linha fica alta e o par não se lê como um par. */}
+              <View style={[styles.rowInfo, !isMobile && styles.rowInfoWide]}>
                 <Text style={[styles.rowName, { color: theme.textPrimary }]}>{item.name}</Text>
                 <StatusBadge
                   status={item.isActive ? 'resolvido' : 'fechado'}
@@ -152,10 +164,16 @@ export default function AdminModules() {
                 <Button
                   title={item.isActive ? 'Desativar' : 'Ativar'}
                   variant="secondary"
+                  icon={item.isActive ? 'toggle-off' : 'toggle-on'}
                   onPress={() => void handleToggle(item)}
                   disabled={toggleModule.isPending}
                 />
-                <Button title="Excluir" variant="danger" onPress={() => setToDelete(item)} />
+                <Button
+                  title="Excluir"
+                  variant="danger"
+                  icon="trash"
+                  onPress={() => setToDelete(item)}
+                />
               </View>
             </View>
           ))}
@@ -177,6 +195,12 @@ export default function AdminModules() {
 
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  create: { gap: 0 },
+  createWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  // Só na linha: em coluna `flexBasis` seria ALTURA.
+  createField: { flexGrow: 1, flexBasis: 240, minWidth: 0 },
+  // O campo tem rótulo acima; sem esta folga o botão sobe e desalinha do input.
+  createAction: { marginTop: 22 },
   note: { fontSize: 12, lineHeight: 17, marginBottom: 4 },
   row: {
     flexDirection: 'row',
@@ -186,6 +210,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   rowInfo: { flex: 1, gap: 6, minWidth: 140 },
+  rowInfoWide: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowName: { fontSize: 15, fontWeight: '600' },
   rowActions: { flexDirection: 'row', gap: 8 },
 })

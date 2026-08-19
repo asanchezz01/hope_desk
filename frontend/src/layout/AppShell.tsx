@@ -42,12 +42,28 @@ interface AppShellProps {
    * virtualização, avisa no console e rola em dois eixos concorrentes.
    */
   scroll?: boolean
+  /**
+   * Quanto da tela o conteúdo pode ocupar.
+   *
+   *   'wide'    telas em GRADE (painel): as colunas preenchem a largura extra;
+   *   'default' listas e leitura corrida — o teto de sempre;
+   *   'form'    coluna única: alargar só afasta o rótulo do valor.
+   */
+  width?: 'default' | 'wide' | 'form'
 }
 
-export default function AppShell({ children, title, navItems = [], scroll = true }: AppShellProps) {
+export default function AppShell({
+  children,
+  title,
+  navItems = [],
+  scroll = true,
+  width = 'default',
+}: AppShellProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
-  const { hasSideNav, contentMaxWidth } = useBreakpoint()
+  const { hasSideNav, contentMaxWidth, wideMaxWidth, formMaxWidth } = useBreakpoint()
+  const maxWidth =
+    width === 'form' ? formMaxWidth : width === 'wide' ? wideMaxWidth : contentMaxWidth
   const { user, signOut } = useAuth()
   const logoUrl = useCompanyLogo()
 
@@ -95,7 +111,7 @@ export default function AppShell({ children, title, navItems = [], scroll = true
             style={styles.content}
             contentContainerStyle={[
               styles.contentInner,
-              { paddingBottom: insets.bottom + 24, maxWidth: contentMaxWidth },
+              { paddingBottom: insets.bottom + 24, maxWidth },
             ]}
           >
             {children}

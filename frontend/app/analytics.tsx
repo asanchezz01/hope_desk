@@ -121,14 +121,14 @@ export default function Analytics() {
 
   if (analytics.isError && !data) {
     return (
-      <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)}>
+      <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)} width="wide">
         <ErrorState error={analytics.error} onRetry={() => void analytics.refetch()} />
       </AppShell>
     )
   }
 
   return (
-    <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)}>
+    <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)} width="wide">
       {/* Uma linha de filtros, acima de tudo o que ela recorta. Nunca um filtro
           dentro de um card de gráfico: os números têm de concordar entre si. */}
       <Card>

@@ -63,7 +63,7 @@ export default function AdminParameters() {
 
   if (!isSuperuser) {
     return (
-      <AppShell title="Parâmetros" navItems={navItemsFor(user)}>
+      <AppShell title="Parâmetros" navItems={navItemsFor(user)} width="form">
         <Card>
           <EmptyState
             title="Sem permissão"
@@ -130,7 +130,7 @@ export default function AdminParameters() {
 
   if (parameters.isError && !parameters.data) {
     return (
-      <AppShell title="Parâmetros" navItems={navItemsFor(user)}>
+      <AppShell title="Parâmetros" navItems={navItemsFor(user)} width="form">
         <Card>
           <ErrorState error={parameters.error} onRetry={() => void parameters.refetch()} />
         </Card>
@@ -140,7 +140,7 @@ export default function AdminParameters() {
 
   if (!parameters.data) {
     return (
-      <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)}>
+      <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)} width="form">
         <Card>
           <Skeleton height={140} radius={12} />
         </Card>
@@ -149,7 +149,7 @@ export default function AdminParameters() {
   }
 
   return (
-    <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)}>
+    <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)} width="form">
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
           Cabeçalho dos relatórios

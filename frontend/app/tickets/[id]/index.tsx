@@ -34,6 +34,7 @@ import {
 import { useChangeTicketStatus, useDeleteTicket, useTicket } from '../../../src/hooks/useTickets'
 import AppShell from '../../../src/layout/AppShell'
 import { navItemsFor } from '../../../src/layout/nav-items'
+import { useBreakpoint } from '../../../src/layout/useBreakpoint'
 import { useTheme } from '../../../src/theme/ThemeContext'
 
 export default function TicketDetail() {
@@ -41,6 +42,9 @@ export default function TicketDetail() {
   const router = useRouter()
   const toast = useToast()
   const { user } = useAuth()
+  // O mesmo limiar da grade de chamados (1180), e não o de desktop (1024): a
+  // 1024 as duas colunas encolhem abaixo do que o cartão de detalhe comporta.
+  const twoColumns = useBreakpoint().gridColumns > 1
   const params = useLocalSearchParams<{ id: string }>()
 
   const ticketId = Number(params.id)
@@ -159,169 +163,194 @@ export default function TicketDetail() {
 
   return (
     <AppShell title={`Chamado #${data.id}`} navItems={navItemsFor(user)}>
-      <Card>
-        <View style={styles.headerRow}>
-          <StatusBadge status={data.status} label={data.statusLabel} />
-          <Text style={[styles.created, { color: theme.muted }]}>
-            Aberto em {formatInstantLabel(data.createdAt)}
+      {/* Em tela larga o detalhe fica à esquerda e as atividades à direita: em
+          coluna única a lista de atividades empurrava os dados do chamado para
+          fora da tela, e era preciso rolar de volta para conferir o cliente. */}
+      <View style={[styles.stack, twoColumns && styles.columns]}>
+        <Card style={twoColumns ? styles.columnAside : undefined}>
+          <View style={styles.headerRow}>
+            <StatusBadge status={data.status} label={data.statusLabel} />
+            <Text style={[styles.created, { color: theme.muted }]}>
+              Aberto em {formatInstantLabel(data.createdAt)}
+            </Text>
+          </View>
+
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>
+            {data.title}
           </Text>
-        </View>
+          <Text style={[styles.description, { color: theme.textSecondary }]}>
+            {data.description}
+          </Text>
 
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>
-          {data.title}
-        </Text>
-        <Text style={[styles.description, { color: theme.textSecondary }]}>{data.description}</Text>
-
-        <View style={[styles.facts, { borderTopColor: theme.border }]}>
-          <Fact label="Cliente" value={data.client.name} hint={data.client.email} />
-          <Fact
-            label="Técnico"
-            value={data.technician?.name ?? 'Sem técnico designado'}
-            hint={data.technician?.email}
-          />
-          <Fact
-            label="Módulo"
-            value={data.systemModule?.name ?? '—'}
-            hint={
-              data.systemModule && !data.systemModule.isActive
-                ? 'Módulo desativado (o chamado segue editável)'
-                : undefined
-            }
-          />
-        </View>
-
-        {canChange && (
-          <View style={styles.statusControl}>
-            <Select
-              label="Alterar situação"
-              value={data.status}
-              options={TICKET_STATUSES.map((value) => ({
-                value,
-                label: TICKET_STATUS_FILTER_LABELS[value],
-              }))}
-              onChange={(value) => void handleChangeStatus(value)}
-              disabled={changeStatus.isPending}
+          <View style={[styles.facts, { borderTopColor: theme.border }]}>
+            <Fact label="Cliente" value={data.client.name} hint={data.client.email} />
+            <Fact
+              label="Técnico"
+              value={data.technician?.name ?? 'Sem técnico designado'}
+              hint={data.technician?.email}
+            />
+            <Fact
+              label="Módulo"
+              value={data.systemModule?.name ?? '—'}
+              hint={
+                data.systemModule && !data.systemModule.isActive
+                  ? 'Módulo desativado (o chamado segue editável)'
+                  : undefined
+              }
             />
           </View>
-        )}
 
-        <View style={styles.actions}>
-          {canEdit && (
-            <Button
-              title="Editar"
-              variant="secondary"
-              onPress={() => router.push(`/tickets/${data.id}/edit`)}
-            />
+          {canChange && (
+            <View style={styles.statusControl}>
+              <Select
+                label="Alterar situação"
+                value={data.status}
+                options={TICKET_STATUSES.map((value) => ({
+                  value,
+                  label: TICKET_STATUS_FILTER_LABELS[value],
+                }))}
+                onChange={(value) => void handleChangeStatus(value)}
+                disabled={changeStatus.isPending}
+              />
+            </View>
           )}
-          {canDelete && (
-            <Button title="Excluir" variant="danger" onPress={() => setConfirmDeleteTicket(true)} />
-          )}
-        </View>
 
-        {canEdit && !canDelete && (
-          // Explicar por que o botão não está aí evita o suporte receber
-          // "sumiu o excluir".
-          <Text style={[styles.note, { color: theme.muted }]}>{TICKET_DELETE_WINDOW_MESSAGE}</Text>
-        )}
-      </Card>
+          <View style={styles.actions}>
+            {canEdit && (
+              <Button
+                title="Editar"
+                variant="secondary"
+                icon="pen"
+                onPress={() => router.push(`/tickets/${data.id}/edit`)}
+              />
+            )}
+            {canDelete && (
+              <Button
+                title="Excluir"
+                variant="danger"
+                icon="trash"
+                onPress={() => setConfirmDeleteTicket(true)}
+              />
+            )}
+          </View>
 
-      <Card>
-        <View style={styles.sectionHeader}>
-          <Text
-            accessibilityRole="header"
-            style={[styles.sectionTitle, { color: theme.textPrimary }]}
-          >
-            Atividades
-          </Text>
-          {activities.data && activities.data.items.length > 0 && (
-            <Text style={[styles.totalHours, { color: theme.textSecondary }]}>
-              {activities.data.totalHours.toFixed(2).replace('.', ',')} h no total
+          {canEdit && !canDelete && (
+            // Explicar por que o botão não está aí evita o suporte receber
+            // "sumiu o excluir".
+            <Text style={[styles.note, { color: theme.muted }]}>
+              {TICKET_DELETE_WINDOW_MESSAGE}
             </Text>
           )}
-        </View>
+        </Card>
 
-        {activities.isLoading && <Skeleton height={60} />}
+        <Card style={twoColumns ? styles.columnMain : undefined}>
+          <View style={styles.sectionHeader}>
+            <Text
+              accessibilityRole="header"
+              style={[styles.sectionTitle, { color: theme.textPrimary }]}
+            >
+              Atividades
+            </Text>
+            {activities.data && activities.data.items.length > 0 && (
+              <Text style={[styles.totalHours, { color: theme.textSecondary }]}>
+                {activities.data.totalHours.toFixed(2).replace('.', ',')} h no total
+              </Text>
+            )}
+          </View>
 
-        {activities.isError && (
-          <ErrorState error={activities.error} onRetry={() => void activities.refetch()} />
-        )}
+          {activities.isLoading && <Skeleton height={60} />}
 
-        {activities.data && timeline.length === 0 && !showActivityForm && (
-          <EmptyState
-            title="Nenhuma atividade registrada"
-            description={
-              canAddActivity
-                ? 'Registre o tempo trabalhado neste chamado.'
-                : 'As atividades aparecerão aqui conforme a equipe registrar o atendimento.'
-            }
-            actionLabel={canAddActivity ? 'Registrar atividade' : undefined}
-            onAction={canAddActivity ? () => setShowActivityForm(true) : undefined}
-          />
-        )}
+          {activities.isError && (
+            <ErrorState error={activities.error} onRetry={() => void activities.refetch()} />
+          )}
 
-        {timeline.map((item) => (
-          <View key={item.key} style={[styles.activity, { borderTopColor: theme.border }]}>
-            {editingActivity?.id === item.activity.id ? (
-              <ActivityForm
-                activity={item.activity}
-                submitting={updateActivity.isPending}
-                onCancel={() => setEditingActivity(null)}
-                onSubmit={async (input) => {
-                  await updateActivity.mutateAsync({ id: item.activity.id, input })
-                  setEditingActivity(null)
-                  toast.show('Atividade atualizada.', 'success')
-                }}
-              />
-            ) : (
-              <>
-                <Text style={[styles.activityNotes, { color: theme.textPrimary }]}>
-                  {item.title}
-                </Text>
-                <Text style={[styles.activityMeta, { color: theme.muted }]}>
-                  {item.when} · {item.duration.toFixed(2).replace('.', ',')} h · {item.author}
-                </Text>
-                <View style={styles.activityActions}>
-                  {/* Aqui as dicas vêm do servidor: a regra depende da autoria,
+          {activities.data && timeline.length === 0 && !showActivityForm && (
+            <EmptyState
+              title="Nenhuma atividade registrada"
+              description={
+                canAddActivity
+                  ? 'Registre o tempo trabalhado neste chamado.'
+                  : 'As atividades aparecerão aqui conforme a equipe registrar o atendimento.'
+              }
+              actionLabel={canAddActivity ? 'Registrar atividade' : undefined}
+              onAction={canAddActivity ? () => setShowActivityForm(true) : undefined}
+            />
+          )}
+
+          {timeline.map((item) => (
+            <View key={item.key} style={[styles.activity, { borderTopColor: theme.border }]}>
+              {editingActivity?.id === item.activity.id ? (
+                <ActivityForm
+                  activity={item.activity}
+                  submitting={updateActivity.isPending}
+                  onCancel={() => setEditingActivity(null)}
+                  onSubmit={async (input) => {
+                    await updateActivity.mutateAsync({ id: item.activity.id, input })
+                    setEditingActivity(null)
+                    toast.show('Atividade atualizada.', 'success')
+                  }}
+                />
+              ) : (
+                <>
+                  <Text style={[styles.activityNotes, { color: theme.textPrimary }]}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.activityMeta, { color: theme.muted }]}>
+                    {item.when} · {item.duration.toFixed(2).replace('.', ',')} h · {item.author}
+                  </Text>
+                  <View style={styles.activityActions}>
+                    {/* Aqui as dicas vêm do servidor: a regra depende da autoria,
                       e nem superuser edita atividade lançada por outro. */}
-                  {item.activity.canEdit && (
-                    <Button
-                      title="Editar"
-                      variant="secondary"
-                      onPress={() => setEditingActivity(item.activity)}
-                    />
-                  )}
-                  {item.activity.canDelete && (
-                    <Button
-                      title="Excluir"
-                      variant="danger"
-                      onPress={() => setActivityToDelete(item.activity)}
-                    />
-                  )}
-                </View>
-              </>
-            )}
-          </View>
-        ))}
+                    {item.activity.canEdit && (
+                      <Button
+                        title="Editar"
+                        variant="secondary"
+                        icon="pen"
+                        onPress={() => setEditingActivity(item.activity)}
+                      />
+                    )}
+                    {item.activity.canDelete && (
+                      <Button
+                        title="Excluir"
+                        variant="danger"
+                        icon="trash"
+                        onPress={() => setActivityToDelete(item.activity)}
+                      />
+                    )}
+                  </View>
+                </>
+              )}
+            </View>
+          ))}
 
-        {canAddActivity && !editingActivity && (
-          <View style={[styles.newActivity, { borderTopColor: theme.border }]}>
-            {showActivityForm ? (
-              <ActivityForm
-                submitting={createActivity.isPending}
-                onCancel={() => setShowActivityForm(false)}
-                onSubmit={async (input) => {
-                  await createActivity.mutateAsync(input)
-                  toast.show('Atividade registrada.', 'success')
-                }}
-              />
-            ) : (
-              timeline.length > 0 && (
-                <Button title="Registrar atividade" onPress={() => setShowActivityForm(true)} />
-              )
-            )}
-          </View>
-        )}
-      </Card>
+          {canAddActivity && !editingActivity && (
+            <View style={[styles.newActivity, { borderTopColor: theme.border }]}>
+              {showActivityForm ? (
+                <ActivityForm
+                  submitting={createActivity.isPending}
+                  onCancel={() => setShowActivityForm(false)}
+                  onSubmit={async (input) => {
+                    await createActivity.mutateAsync(input)
+                    toast.show('Atividade registrada.', 'success')
+                  }}
+                />
+              ) : (
+                timeline.length > 0 && (
+                  // Numa coluna o botão esticaria de ponta a ponta do cartão; a
+                  // linha o deixa com a largura do próprio rótulo.
+                  <View style={styles.newActivityAction}>
+                    <Button
+                      title="Registrar atividade"
+                      icon="plus"
+                      onPress={() => setShowActivityForm(true)}
+                    />
+                  </View>
+                )
+              )}
+            </View>
+          )}
+        </Card>
+      </View>
 
       <ConfirmationDialog
         visible={confirmDeleteTicket}
@@ -369,8 +398,25 @@ const styles = StyleSheet.create({
   created: { fontSize: 12 },
   title: { fontSize: 20, fontWeight: '700', marginTop: 10 },
   description: { marginTop: 8, lineHeight: 21 },
-  facts: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, gap: 12 },
-  fact: { gap: 2 },
+  // `flexBasis` cuida da quebra sem consultar breakpoint: cabendo dois fatos
+  // lado a lado eles ficam lado a lado; no celular, um por linha.
+  facts: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    gap: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  fact: { gap: 2, flexGrow: 1, flexBasis: 180, minWidth: 0 },
+  // `alignItems: flex-start` de propósito: sem isto as duas colunas ficariam
+  // com a mesma altura e o cartão do detalhe teria um vão em branco no fim.
+  // O `gap` do AppShell separava os dois cartões; agora eles têm um pai
+  // próprio, e o espaçamento tem de vir daqui — inclusive no celular.
+  stack: { gap: 16 },
+  columns: { flexDirection: 'row', alignItems: 'flex-start' },
+  columnAside: { flexGrow: 1, flexBasis: 380, minWidth: 0 },
+  columnMain: { flexGrow: 2, flexBasis: 520, minWidth: 0 },
   factLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   factValue: { fontSize: 15 },
   factHint: { fontSize: 12 },
@@ -391,4 +437,5 @@ const styles = StyleSheet.create({
   activityMeta: { fontSize: 12 },
   activityActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
   newActivity: { paddingTop: 16, marginTop: 16, borderTopWidth: 1 },
+  newActivityAction: { flexDirection: 'row' },
 })

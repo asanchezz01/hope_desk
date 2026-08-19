@@ -78,7 +78,7 @@ export default function NewTicket() {
 
   if (modules.isError) {
     return (
-      <AppShell title="Novo chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Novo chamado" navItems={navItemsFor(user)} width="form">
         <ErrorState error={modules.error} onRetry={() => void modules.refetch()} />
       </AppShell>
     )
@@ -93,7 +93,7 @@ export default function NewTicket() {
   const moduleOptions = moduleList.map((item) => ({ value: item.id, label: item.name }))
 
   return (
-    <AppShell title="Novo chamado" navItems={navItemsFor(user)}>
+    <AppShell title="Novo chamado" navItems={navItemsFor(user)} width="form">
       <Card>
         <Input
           label="Título"

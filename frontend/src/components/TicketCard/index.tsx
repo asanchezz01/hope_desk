@@ -1,5 +1,6 @@
 import React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import type { StyleProp, ViewStyle } from 'react-native'
 
 import type { Ticket } from '../../api/tickets'
 import { formatHours } from '../../domain/format'
@@ -13,9 +14,11 @@ interface TicketCardProps {
   onPress: () => void
   /** Cliente não precisa ver o próprio nome repetido em toda linha da lista. */
   showClient?: boolean
+  /** Usado pela grade da listagem para igualar a altura dos cartões da linha. */
+  style?: StyleProp<ViewStyle>
 }
 
-export default function TicketCard({ ticket, onPress, showClient = true }: TicketCardProps) {
+export default function TicketCard({ ticket, onPress, showClient = true, style }: TicketCardProps) {
   const theme = useTheme()
   const isDark = useIsDark()
   // A cor da aresta esquerda é a do status: a lista se lê por cor antes do
@@ -37,6 +40,7 @@ export default function TicketCard({ ticket, onPress, showClient = true }: Ticke
           borderLeftColor: statusColor,
         },
         pressed && styles.pressed,
+        style,
       ]}
     >
       <View style={styles.header}>
@@ -96,6 +100,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 8,
+    // Na grade os cartões da linha têm a mesma altura, mas títulos de tamanhos
+    // diferentes: sem isto o rodapé de um flutuaria acima do rodapé do vizinho.
+    // Em coluna única não há sobra e o valor não muda nada.
+    marginTop: 'auto',
   },
   footerItem: { fontSize: 12 },
 })

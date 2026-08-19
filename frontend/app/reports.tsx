@@ -88,10 +88,10 @@ export default function Reports() {
         <View style={[styles.filters, !isMobile && styles.filtersWide]}>
           {tab === 'activities' ? (
             <>
-              <View style={styles.filterField}>
+              <View style={!isMobile ? styles.filterField : undefined}>
                 <DateField label="Início" value={start} onChange={setStart} />
               </View>
-              <View style={styles.filterField}>
+              <View style={!isMobile ? styles.filterField : undefined}>
                 {/* O legado trata a data final como INCLUSIVA; dizer isso evita
                     a dúvida de "preciso pôr o dia seguinte?". */}
                 <DateField
@@ -104,10 +104,10 @@ export default function Reports() {
             </>
           ) : (
             <>
-              <View style={styles.filterField}>
+              <View style={!isMobile ? styles.filterField : undefined}>
                 <Select label="Ano" value={year} options={yearOptions} onChange={setYear} />
               </View>
-              <View style={styles.filterField}>
+              <View style={!isMobile ? styles.filterField : undefined}>
                 <Select
                   label="Mês"
                   value={month}
@@ -122,6 +122,7 @@ export default function Reports() {
         <View style={styles.actions}>
           <Button
             title={pdf.isPending ? 'Gerando…' : 'Baixar PDF'}
+            icon="file-pdf"
             onPress={() => void downloadPdf()}
             loading={pdf.isPending}
           />
@@ -343,7 +344,10 @@ const styles = StyleSheet.create({
   tabLabelSelected: { fontWeight: '700' },
   filters: { gap: 0 },
   filtersWide: { flexDirection: 'row', gap: 12 },
-  filterField: { flexGrow: 1, flexBasis: 180 },
+  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
+  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
+  // estilo é aplicado condicionalmente, como em `analytics`.
+  filterField: { flexGrow: 1, flexBasis: 180, minWidth: 0, maxWidth: 300 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },

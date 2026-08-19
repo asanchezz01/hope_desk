@@ -5,6 +5,7 @@ import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import {
   TICKET_STATUS_FILTERS,
   TICKET_STATUS_FILTER_LABELS,
+  type Ticket,
   type TicketStatusFilter,
 } from '../src/api/tickets'
 import { toMessage } from '../src/api/to-message'
@@ -37,12 +38,15 @@ const PAGE_SIZE = 25
 /** Valor sentinela do seletor de período: o `Select` não aceita `null`. */
 const ALL_PERIODS = 0
 
+/** Célula da grade: um chamado, ou um vão para completar a última linha. */
+type TicketRow = Ticket | { spacerKey: string }
+
 export default function TicketsScreen() {
   const theme = useTheme()
   const isDark = useIsDark()
   const router = useRouter()
   const { user, isClient } = useAuth()
-  const { isMobile, contentMaxWidth } = useBreakpoint()
+  const { isMobile, wideMaxWidth, gridColumns } = useBreakpoint()
 
   // Calculado uma vez: `new Date()` no corpo do componente muda de identidade a
   // cada render e invalidaria os `useMemo` que dependem dele.
@@ -146,11 +150,24 @@ export default function TicketsScreen() {
 
   const total = list.data?.total ?? 0
   const totalPages = list.data?.totalPages ?? 1
-  const tickets = list.data?.items ?? []
+  const items = list.data?.items
+
+  // `numColumns` estica o último item quando a linha fica incompleta: um cartão
+  // sozinho ocuparia a largura de dois, e a lista termina com um degrau. Os
+  // espaços invisíveis completam a linha e mantêm a coluna do tamanho certo.
+  const rows: TicketRow[] = useMemo(() => {
+    const tickets = items ?? []
+    if (gridColumns === 1) return tickets
+    const missing = (gridColumns - (tickets.length % gridColumns)) % gridColumns
+    return [
+      ...tickets,
+      ...Array.from({ length: missing }, (_, index) => ({ spacerKey: `spacer-${index}` })),
+    ]
+  }, [items, gridColumns])
 
   const filters = (
     <View style={[styles.filters, !isMobile && styles.filtersWide]}>
-      <View style={styles.filterField}>
+      <View style={!isMobile ? styles.filterField : undefined}>
         <Select
           label="Período"
           value={year}
@@ -160,7 +177,7 @@ export default function TicketsScreen() {
       </View>
 
       {!allPeriods && (
-        <View style={styles.filterField}>
+        <View style={!isMobile ? styles.filterField : undefined}>
           <Select
             label="Mês"
             value={month}
@@ -170,7 +187,7 @@ export default function TicketsScreen() {
         </View>
       )}
 
-      <View style={styles.filterField}>
+      <View style={!isMobile ? styles.filterField : undefined}>
         <Select
           label="Situação"
           value={status}
@@ -182,7 +199,7 @@ export default function TicketsScreen() {
         />
       </View>
 
-      <View style={styles.filterField}>
+      <View style={!isMobile ? styles.filterField : undefined}>
         <Input
           label="Buscar"
           placeholder="Número ou título"
@@ -201,11 +218,16 @@ export default function TicketsScreen() {
   const monthlyValue = (value: number | undefined) =>
     value === undefined ? (monthlyLoading ? '…' : '—') : formatHours(value)
 
+  // No celular os quadros empilham: sem isto o `flexBasis` do StatTile viraria
+  // ALTURA e cada um ocuparia 150px com metade vazia.
+  const stacked = isMobile ? styles.stackedTile : undefined
+
   const summaryCard = (
     <Card>
       <View style={[styles.summaryRow, !isMobile && styles.summaryRowWide]}>
         {allPeriods ? (
           <StatTile
+            style={stacked}
             accent={theme.chartMagnitude}
             label="Total de horas do período"
             value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
@@ -214,18 +236,21 @@ export default function TicketsScreen() {
         ) : (
           <>
             <StatTile
+              style={stacked}
               accent={theme.chartMagnitude}
               label="Total de horas do período"
               value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
               hint="Chamados criados no mês"
             />
             <StatTile
+              style={stacked}
               accent={statusChartColor('em_andamento', isDark)}
               label="Atividades do período em chamados de outros meses"
               value={monthlyValue(monthlySummary.data?.externalTicketActivityHours)}
               hint={monthlyLoading ? 'Carregando…' : 'Somente lançamento no mês'}
             />
             <StatTile
+              style={stacked}
               accent={statusChartColor('resolvido', isDark)}
               label="Horas pagas no período selecionado"
               value={monthlyValue(monthlySummary.data?.paidHoursInMonth)}
@@ -253,14 +278,20 @@ export default function TicketsScreen() {
   return (
     <AppShell title="Chamados" navItems={navItemsFor(user)} scroll={false}>
       <FlatList
-        data={tickets}
-        keyExtractor={(ticket) => String(ticket.id)}
+        // Trocar `numColumns` em uma FlatList já montada é um erro em tempo de
+        // execução no React Native; a `key` força a remontagem ao girar a tela
+        // ou redimensionar a janela.
+        key={`cols-${gridColumns}`}
+        data={rows}
+        numColumns={gridColumns}
+        columnWrapperStyle={gridColumns > 1 ? styles.gridRow : undefined}
+        keyExtractor={(row) => ('spacerKey' in row ? row.spacerKey : String(row.id))}
         contentContainerStyle={[
           styles.listContent,
           // `AppShell scroll={false}` entrega a região de tamanho total para a
           // lista rolar; o recorte de largura + centralização é daqui, no
           // container de conteúdo (uma coluna), casando com o painel de gráficos.
-          { width: '100%', maxWidth: contentMaxWidth, alignSelf: 'center' },
+          { width: '100%', maxWidth: wideMaxWidth, alignSelf: 'center' },
         ]}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
@@ -286,11 +317,16 @@ export default function TicketsScreen() {
                 <Button
                   title="Exportar PDF"
                   variant="secondary"
+                  icon="file-pdf"
                   disabled={allPeriods}
                   loading={pdf.isPending}
                   onPress={downloadPdf}
                 />
-                <Button title="Novo chamado" onPress={() => router.push('/tickets/new')} />
+                <Button
+                  title="Novo chamado"
+                  icon="plus"
+                  onPress={() => router.push('/tickets/new')}
+                />
               </View>
             </View>
             {summaryCard}
@@ -319,19 +355,27 @@ export default function TicketsScreen() {
             />
           )
         }
-        renderItem={({ item }) => (
-          <TicketCard
-            ticket={item}
-            showClient={!isClient}
-            onPress={() => router.push(`/tickets/${item.id}`)}
-          />
-        )}
+        renderItem={({ item }) => {
+          // `flex: 1` só dentro da linha: em coluna única ele não muda nada, e
+          // sem ele os cartões de uma linha ficam com larguras diferentes.
+          const cell = gridColumns > 1 ? styles.gridItem : undefined
+          if ('spacerKey' in item) return <View style={cell} />
+          return (
+            <TicketCard
+              ticket={item}
+              showClient={!isClient}
+              style={cell}
+              onPress={() => router.push(`/tickets/${item.id}`)}
+            />
+          )
+        }}
         ListFooterComponent={
           totalPages > 1 ? (
             <View style={styles.pagination}>
               <Button
                 title="Anterior"
                 variant="secondary"
+                icon="chevron-left"
                 disabled={page <= 1 || list.isFetching}
                 onPress={() => setPage((current) => Math.max(1, current - 1))}
               />
@@ -341,6 +385,8 @@ export default function TicketsScreen() {
               <Button
                 title="Próxima"
                 variant="secondary"
+                icon="chevron-right"
+                iconPosition="right"
                 disabled={page >= totalPages || list.isFetching}
                 onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
               />
@@ -365,6 +411,7 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   summaryRow: { gap: 10 },
   summaryRowWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  stackedTile: { flexBasis: 'auto' },
   summaryGridTotal: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,8 +432,13 @@ const styles = StyleSheet.create({
   count: { fontSize: 14, fontWeight: '600' },
   filters: { gap: 0 },
   filtersWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  filterField: { flexGrow: 1, flexBasis: 200 },
+  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
+  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
+  // estilo é aplicado condicionalmente, como em `analytics`.
+  filterField: { flexGrow: 1, flexBasis: 200, minWidth: 0 },
   separator: { height: 10 },
+  gridRow: { gap: 10, alignItems: 'stretch' },
+  gridItem: { flex: 1 },
   skeletons: { gap: 10 },
   pagination: {
     flexDirection: 'row',

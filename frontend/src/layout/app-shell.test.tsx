@@ -52,7 +52,10 @@ jest.mock('./useBreakpoint', () => ({
     isTablet: false,
     isDesktop: mockHasSideNav,
     hasSideNav: mockHasSideNav,
-    contentMaxWidth: 1120,
+    contentMaxWidth: mockHasSideNav ? 1120 : 840,
+    wideMaxWidth: mockHasSideNav ? 1360 : 840,
+    formMaxWidth: 760,
+    gridColumns: mockHasSideNav ? 2 : 1,
   }),
 }))
 
