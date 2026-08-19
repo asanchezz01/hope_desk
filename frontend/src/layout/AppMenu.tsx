@@ -11,11 +11,11 @@
 // Por isso o gatilho aqui é incondicional. Em telas largas ele convive com a
 // lateral (que é atalho para o que se usa o tempo todo) e guarda a lista
 // inteira, exatamente como o legado fazia com a navbar e o sanduíche.
+import { FontAwesome6 } from '@expo/vector-icons'
 import { usePathname, useRouter } from 'expo-router'
 import React from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 
-import ThemeToggle from '../components/ThemeToggle'
 import { useTheme } from '../theme/ThemeContext'
 
 import type { MenuItem } from './nav-items'
@@ -107,6 +107,11 @@ export default function AppMenu({
                       { backgroundColor: active ? theme.primary : 'transparent' },
                     ]}
                   />
+                  <FontAwesome6
+                    name={item.icon}
+                    size={14}
+                    color={active ? theme.textPrimary : theme.textSecondary}
+                  />
                   <Text
                     style={[
                       styles.itemLabel,
@@ -120,13 +125,6 @@ export default function AppMenu({
               )
             })}
 
-            <View style={[styles.themeRow, { borderTopColor: theme.border }]}>
-              <Text style={[styles.themeLabel, { color: theme.textSecondary }]}>
-                Tema da interface
-              </Text>
-              <ThemeToggle />
-            </View>
-
             <Pressable
               accessibilityRole="menuitem"
               onPress={() => {
@@ -136,6 +134,7 @@ export default function AppMenu({
               style={[styles.item, styles.signOut, { borderTopColor: theme.border }]}
             >
               <View style={styles.marker} />
+              <FontAwesome6 name="right-from-bracket" size={14} color={theme.danger} />
               <Text style={[styles.itemLabel, styles.itemLabelActive, { color: theme.danger }]}>
                 Sair
               </Text>
@@ -212,14 +211,6 @@ const styles = StyleSheet.create({
   marker: { width: 3, height: 20, borderRadius: 2 },
   itemLabel: { fontSize: 15 },
   itemLabelActive: { fontWeight: '700' },
-  themeRow: {
-    gap: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginTop: 6,
-    borderTopWidth: 1,
-  },
-  themeLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   signOut: { marginTop: 6, borderTopWidth: 1 },
   trigger: {
     width: 38,

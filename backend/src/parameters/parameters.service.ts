@@ -1,4 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   SYSTEM_PARAMETER_DEFAULTS,
@@ -11,7 +14,43 @@ import {
   CompanyParametersResponse,
   PublicCompanyParametersResponse,
   UpdateCompanyParametersDto,
+  UploadLogoDto,
 } from './dto/parameter.dto';
+
+const LOGO_MAX_BYTES = 1024 * 1024; // 1 MB
+
+/** Tipos de imagem aceitos para a logo (contentType -> extensão). */
+const LOGO_EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/svg+xml': 'svg',
+};
+
+/** Extensão -> contentType, usado ao servir a imagem gravada. */
+const LOGO_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+};
+
+export interface LogoFile {
+  buffer: Buffer;
+  contentType: string;
+  size: number;
+}
+
+async function rmIfExists(target: string): Promise<void> {
+  try {
+    await fs.promises.unlink(target);
+  } catch {
+    // Arquivo ausente: nada a fazer.
+  }
+}
 
 /**
  * Parâmetros da empresa (`system_parameter`).
@@ -27,7 +66,16 @@ export class ParametersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /** Pasta física onde a logo é gravada (legenda, não um caminho de URL). */
+  private get logoDir(): string {
+    return (
+      this.configService.get<string>('app.logoDir') ??
+      path.resolve(process.cwd(), 'media', 'logo')
+    );
+  }
 
   /** `get_system_parameter(key, default)`: default quando ausente OU vazio. */
   async get(key: SystemParameterKey): Promise<string> {
@@ -155,6 +203,123 @@ export class ParametersService {
     }
 
     return this.findAll();
+  }
+
+  /**
+   * Resolve o valor do parâmetro `company_logo` em um arquivo local dentro da
+   * pasta de logos. Nunca aponta para fora dela, o que impede que um valor
+   * gravado (legacy/URL ou caminho) vire leitura de arquivo arbitrário.
+   */
+  resolveLogoPath(value?: string | null): string | null {
+    const dir = this.logoDir;
+    const raw = (value ?? '').trim();
+    if (!raw || /^https?:\/\//i.test(raw)) {
+      return null; // vazio ou URL remota (legado) => sem logo local
+    }
+    const candidate = path.isAbsolute(raw) ? raw : path.resolve(dir, raw);
+    const prefix = dir.endsWith(path.sep) ? dir : `${dir}${path.sep}`;
+    if (candidate !== dir && !candidate.startsWith(prefix)) {
+      return null; // escapou da pasta de logos
+    }
+    return fs.existsSync(candidate) ? candidate : null;
+  }
+
+  /**
+   * Envia a logo (base64), grava na pasta de logos e registra o nome do
+   * arquivo no parâmetro `company_logo`.
+   */
+  async uploadLogo(
+    dto: UploadLogoDto,
+  ): Promise<{ companyLogo: string; size: number; contentType: string }> {
+    const extension = LOGO_EXTENSIONS[dto.contentType];
+    if (!extension) {
+      throw new BadRequestException(
+        'Tipo de imagem não suportado para a logo (use PNG, JPEG, WebP, GIF ou SVG).',
+      );
+    }
+    const base64 = (dto.dataBase64 ?? '').replace(/^data:[^,]*,/, '');
+    if (!base64) {
+      throw new BadRequestException('Envie a imagem da logo (campo dataBase64).');
+    }
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length === 0) {
+      throw new BadRequestException('A imagem da logo é inválida ou vazia.');
+    }
+    if (buffer.length > LOGO_MAX_BYTES) {
+      throw new BadRequestException('A logo não pode exceder 1MB.');
+    }
+
+    const dir = this.logoDir;
+    await fs.promises.mkdir(dir, { recursive: true });
+    await this.clearLogoFiles();
+    const fileName = `logo.${extension}`;
+    await fs.promises.writeFile(path.join(dir, fileName), buffer);
+
+    await this.upsertLogo(fileName);
+    this.audit.record({
+      action: AUDIT_ACTIONS.PARAMETERS_UPDATED,
+      entityType: 'parameters',
+      metadata: { keys: 'company_logo', fileName, size: buffer.length },
+    });
+
+    return {
+      companyLogo: fileName,
+      size: buffer.length,
+      contentType: dto.contentType,
+    };
+  }
+
+  /** Remove a logo gravada e limpa o parâmetro (volta a marca padrão "HD"). */
+  async deleteLogo(): Promise<{ companyLogo: string }> {
+    await this.clearLogoFiles();
+    await this.upsertLogo('');
+    this.audit.record({
+      action: AUDIT_ACTIONS.PARAMETERS_UPDATED,
+      entityType: 'parameters',
+      metadata: { keys: 'company_logo', removed: true },
+    });
+    return { companyLogo: '' };
+  }
+
+  /** Lê a logo gravada para streaming (ou `null` quando não há). */
+  async getLogoFile(): Promise<LogoFile | null> {
+    const record = await this.prisma.systemParameter.findUnique({
+      where: { key: 'company_logo' },
+    });
+    const filePath = record ? this.resolveLogoPath(record.value) : null;
+    if (!filePath) {
+      return null;
+    }
+    const buffer = await fs.promises.readFile(filePath);
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    return {
+      buffer,
+      contentType: LOGO_CONTENT_TYPES[ext] ?? 'application/octet-stream',
+      size: buffer.length,
+    };
+  }
+
+  private async upsertLogo(value: string): Promise<void> {
+    await this.prisma.systemParameter.upsert({
+      where: { key: 'company_logo' as SystemParameterKey },
+      create: { key: 'company_logo', value },
+      update: { value },
+    });
+  }
+
+  private async clearLogoFiles(): Promise<void> {
+    const dir = this.logoDir;
+    let entries: string[];
+    try {
+      entries = await fs.promises.readdir(dir);
+    } catch {
+      return; // pasta inexistente
+    }
+    for (const entry of entries) {
+      if (/^logo\./.test(entry)) {
+        await rmIfExists(path.join(dir, entry));
+      }
+    }
   }
 }
 

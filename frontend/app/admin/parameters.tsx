@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 
 import { toMessage } from '../../src/api/to-message'
 import Button from '../../src/components/Button'
 import Card from '../../src/components/Card'
+import ConfirmationDialog from '../../src/components/ConfirmationDialog'
 import DateField from '../../src/components/DateField'
 import EmptyState from '../../src/components/EmptyState'
 import ErrorState from '../../src/components/ErrorState'
 import Input from '../../src/components/Input'
+import LogoField from '../../src/components/LogoField'
 import Skeleton from '../../src/components/Skeleton'
 import { useToast } from '../../src/components/Toast'
+import type { SelectedImage } from '../../src/components/image-file.types'
 import { useAuth } from '../../src/context/AuthProvider'
 import { validateDecimalInput } from '../../src/domain/decimal-input'
-import { useCompanyParameters, useUpdateCompanyParameters } from '../../src/hooks/useAdmin'
+import {
+  useCompanyParameters,
+  useRemoveCompanyLogo,
+  useUpdateCompanyParameters,
+  useUploadCompanyLogo,
+} from '../../src/hooks/useAdmin'
+import { useCompanyLogo } from '../../src/hooks/useCompanyLogo'
 import AppShell from '../../src/layout/AppShell'
 import { navItemsFor } from '../../src/layout/nav-items'
 import { useTheme } from '../../src/theme/ThemeContext'
@@ -24,10 +33,15 @@ export default function AdminParameters() {
 
   const parameters = useCompanyParameters(isSuperuser)
   const updateParameters = useUpdateCompanyParameters()
+  const uploadLogo = useUploadCompanyLogo()
+  const removeLogo = useRemoveCompanyLogo()
+  const publicLogoUrl = useCompanyLogo()
+  const [logoUrl, setLogoUrl] = useState<string | null>(publicLogoUrl)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState(false)
 
   const [companyName, setCompanyName] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
-  const [companyLogo, setCompanyLogo] = useState('')
   const [monthlyHoursAllowance, setMonthlyHoursAllowance] = useState('')
   const [hoursBankClosingDate, setHoursBankClosingDate] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -38,10 +52,14 @@ export default function AdminParameters() {
     if (!data) return
     setCompanyName(data.companyName)
     setCompanyAddress(data.companyAddress)
-    setCompanyLogo(data.companyLogo)
     setMonthlyHoursAllowance(data.monthlyHoursAllowance)
     setHoursBankClosingDate(data.hoursBankClosingDate)
   }, [loaded]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A URL pública resolve de forma assíncrona; quando chegar, reflete na prévia.
+  useEffect(() => {
+    if (publicLogoUrl) setLogoUrl(publicLogoUrl)
+  }, [publicLogoUrl])
 
   if (!isSuperuser) {
     return (
@@ -71,7 +89,6 @@ export default function AdminParameters() {
       await updateParameters.mutateAsync({
         companyName: companyName.trim(),
         companyAddress: companyAddress.trim(),
-        companyLogo: companyLogo.trim(),
         monthlyHoursAllowance: monthlyHoursAllowance.trim(),
         hoursBankClosingDate,
       })
@@ -79,6 +96,36 @@ export default function AdminParameters() {
     } catch (caught) {
       setError(toMessage(caught))
     }
+  }
+
+  function handleUpload(selected: SelectedImage) {
+    setLogoBusy(true)
+    uploadLogo.mutate(
+      {
+        fileName: selected.fileName,
+        contentType: selected.contentType,
+        dataBase64: selected.dataBase64,
+      },
+      {
+        onSuccess: (result) => {
+          setLogoUrl(result.companyLogo)
+          toast.show('Logo da empresa atualizada.', 'success')
+        },
+        onError: (caught) => toast.show(toMessage(caught), 'error'),
+        onSettled: () => setLogoBusy(false),
+      }
+    )
+  }
+
+  function confirmRemove() {
+    setPendingRemove(false)
+    removeLogo.mutate(undefined, {
+      onSuccess: () => {
+        setLogoUrl(null)
+        toast.show('Logo da empresa removida.', 'success')
+      },
+      onError: (caught) => toast.show(toMessage(caught), 'error'),
+    })
   }
 
   if (parameters.isError && !parameters.data) {
@@ -93,7 +140,7 @@ export default function AdminParameters() {
 
   if (!parameters.data) {
     return (
-      <AppShell title="Parâmetros" navItems={navItemsFor(user)}>
+      <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)}>
         <Card>
           <Skeleton height={140} radius={12} />
         </Card>
@@ -121,17 +168,21 @@ export default function AdminParameters() {
           rows={2}
           disabled={updateParameters.isPending}
         />
-        <Input
-          label="Logo"
-          value={companyLogo}
-          onChangeText={setCompanyLogo}
-          autoCapitalize="none"
-          // O legado buscava a URL dentro do request que gerava o PDF — um SSRF.
-          // A API ignora URLs remotas com aviso em log e segue lendo caminhos
-          // locais; dizer isso aqui evita configurar algo que não terá efeito.
-          hint="URLs remotas são ignoradas na geração do PDF por segurança. Use um caminho local."
-          disabled={updateParameters.isPending}
+      </Card>
+
+      <Card>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Logo da empresa</Text>
+        <LogoField
+          currentUrl={logoUrl}
+          onUpload={Platform.OS === 'web' ? handleUpload : undefined}
+          onRemove={() => setPendingRemove(true)}
+          busy={logoBusy}
+          removeBusy={removeLogo.isPending}
         />
+        <Text style={[styles.hint, { color: theme.textSecondary }]}>
+          PNG, JPEG, WebP, GIF ou SVG, até 1MB. Aparece na tela de login, no cabeçalho do aplicativo
+          e no cabeçalho do PDF.
+        </Text>
       </Card>
 
       <Card>
@@ -166,12 +217,24 @@ export default function AdminParameters() {
           />
         </View>
       </Card>
+
+      <ConfirmationDialog
+        visible={pendingRemove}
+        title="Remover a logo da empresa?"
+        description="A logo atual sai da tela de login, do cabeçalho e do PDF."
+        confirmLabel="Remover"
+        destructive
+        busy={removeLogo.isPending}
+        onCancel={() => setPendingRemove(false)}
+        onConfirm={confirmRemove}
+      />
     </AppShell>
   )
 }
 
 const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  hint: { fontSize: 13, marginTop: 10 },
   error: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
 })

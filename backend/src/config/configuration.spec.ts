@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { ConfigValidationError, loadConfig } from './configuration';
 
 const VALID_ENV: NodeJS.ProcessEnv = {
@@ -18,6 +20,12 @@ describe('loadConfig', () => {
     expect(config.jwt.refreshExpiresIn).toBe('7d');
     expect(config.mail.enabled).toBe(false);
     expect(config.corsOrigins).toEqual([]);
+    expect(config.logoDir).toMatch(/media[\\/]logo$/);
+  });
+
+  it('permite sobrescrever a pasta da logo via LOGO_DIR', () => {
+    const config = loadConfig({ ...VALID_ENV, LOGO_DIR: '/custom/logo-folder' });
+    expect(config.logoDir).toBe(path.resolve('/custom/logo-folder'));
   });
 
   it('exige DATABASE_URL', () => {

@@ -21,7 +21,9 @@ export async function createTestHarness(): Promise<TestHarness> {
     imports: [AppModule],
   }).compile();
 
-  const app = moduleRef.createNestApplication();
+  // Casa com o main.ts: desligamos o parser padrão do Nest (100kb, insuficiente
+  // para a logo em base64) — o parser real é registrado em applyGlobalSetup.
+  const app = moduleRef.createNestApplication({ bodyParser: false });
 
   // Mesma configuração do main.ts: sem isto a suíte testaria uma aplicação
   // sem headers de segurança nem CORS, justamente o que a Fase 11 introduz.

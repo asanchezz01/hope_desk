@@ -315,7 +315,9 @@ export class ReportsService {
     return {
       companyName: values.company_name,
       companyAddress: values.company_address,
-      companyLogo: values.company_logo,
+      // Resolve o nome do arquivo (gravado pelo upload) dentro da pasta de
+      // logos para pdfkit abrir o caminho local; URL/caminho inexistente -> ''.
+      companyLogo: this.parameters.resolveLogoPath(values.company_logo) ?? '',
     };
   }
 

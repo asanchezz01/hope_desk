@@ -9,6 +9,7 @@ import {
   type CreateUserInput,
   type UpdateParametersInput,
   type UpdateUserInput,
+  type UploadLogoInput,
 } from '../api/admin'
 import type { UserRole } from '../api/client'
 
@@ -137,6 +138,18 @@ export function useUpdateCompanyParameters() {
       // A franquia mensal entra no cálculo do banco de horas exibido no painel.
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
     },
+  })
+}
+
+export function useUploadCompanyLogo() {
+  return useMutation({
+    mutationFn: (input: UploadLogoInput) => parametersApi.uploadLogo(input),
+  })
+}
+
+export function useRemoveCompanyLogo() {
+  return useMutation({
+    mutationFn: () => parametersApi.removeLogo(),
   })
 }
 

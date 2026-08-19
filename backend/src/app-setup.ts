@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
 import helmet from 'helmet';
 
 import { resolveCorsOrigin } from './common/http/cors-origin';
@@ -25,10 +26,22 @@ export interface GlobalSetupOptions {
   allowLocalNetworkOrigins?: boolean;
 }
 
+/**
+ * Teto do JSON da API. A logo de até 1MB entra em base64 (payload JSON de
+ * ~1,4MB); o parser padrão do Nest aceitaria só 100kb e a logo viraria 413
+ * antes de o serviço aplicar o seu teto de 1MB (que é um 400). Para o payload
+ * real chegar ao controlador, o parser padrão é desligado (main.ts/harness)
+ * e um com este limite é registrado aqui.
+ */
+const JSON_BODY_LIMIT = '2mb';
+
 export function applyGlobalSetup(
   app: INestApplication,
   options: GlobalSetupOptions,
 ): void {
+  app.use(express.json({ limit: JSON_BODY_LIMIT }));
+  app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+
   app.setGlobalPrefix(options.apiPrefix);
 
   app.useGlobalPipes(

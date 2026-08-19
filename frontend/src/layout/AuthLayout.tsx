@@ -7,6 +7,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Card from '../components/Card'
+import CompanyLogo from '../components/CompanyLogo'
+import { useCompanyLogo } from '../hooks/useCompanyLogo'
 import { useTheme } from '../theme/ThemeContext'
 
 interface AuthLayoutProps {
@@ -19,6 +21,7 @@ interface AuthLayoutProps {
 export default function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
+  const logoUrl = useCompanyLogo()
 
   return (
     <KeyboardAvoidingView
@@ -32,9 +35,7 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.brandMark, { backgroundColor: theme.palette.primary }]}>
-          <Text style={[styles.brandInitials, { color: theme.palette.accent }]}>HD</Text>
-        </View>
+        <CompanyLogo size={60} src={logoUrl} />
         <Text style={[styles.brand, { color: theme.textPrimary }]}>Hope Desk</Text>
 
         <Card style={styles.card}>
@@ -56,14 +57,6 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { flexGrow: 1, alignItems: 'center', gap: 12, paddingHorizontal: 24 },
-  brandMark: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandInitials: { fontSize: 20, fontWeight: '800', letterSpacing: 1 },
   brand: { fontSize: 26, fontWeight: '800' },
   card: { width: '100%', maxWidth: 420, marginTop: 8 },
   title: { fontSize: 19, fontWeight: '700' },

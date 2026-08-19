@@ -27,6 +27,15 @@ jest.mock('../src/theme/useReducedMotion', () => ({
   useReducedMotion: jest.fn(() => true),
 }))
 
+// @expo/vector-icons checa a fonte carregada no construtor do ícone; sem
+// mock, o native module de fontes devolve `undefined` em teste e o
+// `.forEach` do expo-font quebra antes do primeiro render.
+jest.mock('expo-font', () => ({
+  isLoaded: () => true,
+  loadAsync: jest.fn().mockResolvedValue(undefined),
+  useFonts: () => [true],
+}))
+
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
   setItemAsync: jest.fn().mockResolvedValue(undefined),

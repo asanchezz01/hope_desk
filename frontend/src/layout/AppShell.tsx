@@ -7,15 +7,16 @@
 // o que prendia quem entrava pelo telefone na primeira tela. O menu completo
 // (`AppMenu`), com o gatilho sanduíche no cabeçalho, é a navegação de verdade:
 // aparece em qualquer largura e carrega a lista inteira, como no legado.
+import { FontAwesome6 } from '@expo/vector-icons'
 import { usePathname, useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import CommandPalette, { CommandPaletteHint } from '../components/CommandPalette'
-import type { PaletteCommand } from '../components/CommandPalette'
+import CompanyLogo from '../components/CompanyLogo'
 import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../context/AuthProvider'
+import { useCompanyLogo } from '../hooks/useCompanyLogo'
 import { useTheme } from '../theme/ThemeContext'
 
 import AppMenu, { AppMenuTrigger } from './AppMenu'
@@ -25,6 +26,8 @@ import { useBreakpoint } from './useBreakpoint'
 export interface NavItem {
   href: string
   label: string
+  /** Nome do glyph no FontAwesome6 (estilo solid). */
+  icon: React.ComponentProps<typeof FontAwesome6>['name']
   /** Ocultar quando o perfil não puder usar. Não é autorização — a API decide. */
   visible?: boolean
 }
@@ -46,35 +49,20 @@ export default function AppShell({ children, title, navItems = [], scroll = true
   const insets = useSafeAreaInsets()
   const { hasSideNav, contentMaxWidth } = useBreakpoint()
   const { user, signOut } = useAuth()
+  const logoUrl = useCompanyLogo()
 
   const items = navItems.filter((item) => item.visible !== false)
 
-  const [paletteOpen, setPaletteOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
   const menuItems = menuItemsFor(user)
   const roleLabel = user ? (user.role === 'client' ? 'Cliente' : 'Técnico') : undefined
 
-  // Os comandos saem da MESMA lista que a navegação lateral, já filtrada por
-  // perfil. Uma lista paralela escrita à mão divergiria na primeira rota nova —
-  // e ofereceria à pessoa um destino que a API recusa.
-  //
-  // Sem `useMemo`: `navItems` já chega como array novo a cada render (as telas
-  // chamam `navItemsFor(user)` na própria chamada), então memorizar aqui só
-  // acrescentaria a comparação sem nunca acertar o cache.
-  const commands: PaletteCommand[] = items.map((item) => ({
-    id: item.href,
-    label: item.label,
-    href: item.href,
-  }))
-
   return (
     <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.brandRow}>
-          <View style={[styles.brandMark, { backgroundColor: theme.palette.primary }]}>
-            <Text style={[styles.brandInitials, { color: theme.palette.accent }]}>HD</Text>
-          </View>
+          <CompanyLogo size={34} src={logoUrl} />
           <Text
             accessibilityRole="header"
             numberOfLines={1}
@@ -85,11 +73,7 @@ export default function AppShell({ children, title, navItems = [], scroll = true
         </View>
 
         <View style={styles.headerActions}>
-          {commands.length > 0 && <CommandPaletteHint onPress={() => setPaletteOpen(true)} />}
-          {/* O tema tem lugar próprio dentro do menu. No celular, repeti-lo no
-              cabeçalho roubaria a largura do título — que é o que diz onde a
-              pessoa está. */}
-          {(hasSideNav || !user) && <ThemeToggle />}
+          <ThemeToggle />
           {user && <AppMenuTrigger onPress={() => setMenuOpen(true)} />}
         </View>
       </View>
@@ -101,7 +85,7 @@ export default function AppShell({ children, title, navItems = [], scroll = true
             style={[styles.sideNav, { borderRightColor: theme.border }]}
           >
             {items.map((item) => (
-              <SideNavLink key={item.href} href={item.href} label={item.label} />
+              <SideNavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
             ))}
           </View>
         )}
@@ -128,10 +112,6 @@ export default function AppShell({ children, title, navItems = [], scroll = true
         )}
       </View>
 
-      {commands.length > 0 && (
-        <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />
-      )}
-
       {user && (
         <AppMenu
           items={menuItems}
@@ -146,7 +126,15 @@ export default function AppShell({ children, title, navItems = [], scroll = true
   )
 }
 
-function SideNavLink({ href, label }: { href: string; label: string }) {
+function SideNavLink({
+  href,
+  label,
+  icon,
+}: {
+  href: string
+  label: string
+  icon: NavItem['icon']
+}) {
   const theme = useTheme()
   const router = useRouter()
   const pathname = usePathname()
@@ -161,6 +149,11 @@ function SideNavLink({ href, label }: { href: string; label: string }) {
     >
       <View
         style={[styles.navMarker, { backgroundColor: active ? theme.primary : 'transparent' }]}
+      />
+      <FontAwesome6
+        name={icon}
+        size={14}
+        color={active ? theme.textPrimary : theme.textSecondary}
       />
       <Text
         style={[
@@ -187,14 +180,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  brandMark: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandInitials: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
   title: { fontSize: 18, fontWeight: '700', flexShrink: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   signOut: {

@@ -7,6 +7,8 @@
  * - a validação é pura e testável (ver configuration.spec.ts).
  */
 
+import path from 'node:path';
+
 export type NodeEnv = 'development' | 'test' | 'production';
 
 export interface AppConfig {
@@ -16,6 +18,8 @@ export interface AppConfig {
   logLevel: string;
   corsOrigins: string[];
   appPublicUrl: string;
+  /** Pasta onde a logo enviada é persistida (arquivo local, nunca URL remota). */
+  logoDir: string;
   /**
    * Regravar o hash Werkzeug em bcrypt no primeiro login válido.
    *
@@ -170,6 +174,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: str(env, 'LOG_LEVEL') || (isProduction ? 'info' : 'debug'),
     corsOrigins,
     appPublicUrl: str(env, 'APP_PUBLIC_URL') || 'http://localhost:8081',
+    logoDir: str(env, 'LOGO_DIR')
+      ? path.resolve(str(env, 'LOGO_DIR'))
+      : path.resolve(process.cwd(), 'media', 'logo'),
     passwordRehashEnabled: bool(env, 'PASSWORD_REHASH_ENABLED', true),
     databaseUrl,
     jwt: {

@@ -11,7 +11,7 @@
 // administrativas exigem `is_superuser`, não `technician`. Gestão de usuários é
 // a exceção.
 import type { ApiUser, UserRole } from './client'
-import { request } from './client'
+import { API_URL, request } from './client'
 
 function toQueryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams()
@@ -115,11 +115,35 @@ export interface CompanyParameters extends PublicCompanyParameters {
 export interface UpdateParametersInput {
   companyName?: string
   companyAddress?: string
-  companyLogo?: string
+  // A logo é tratada por upload (`uploadLogo`/`removeLogo`), não por texto.
   /** Aceita vírgula decimal, como o legado. Separador de milhar é rejeitado. */
   monthlyHoursAllowance?: string
   hoursBankClosingDate?: string
 }
+
+/** Payload do upload da logo em base64 (evita multipart no stack atual). */
+export interface UploadLogoInput {
+  fileName: string
+  contentType: string
+  dataBase64: string
+}
+
+export interface UploadLogoResult {
+  companyLogo: string
+  size: number
+  contentType: string
+}
+
+export interface RemoveLogoResult {
+  companyLogo: string
+}
+
+/**
+ * URL pública da logo (GET /parameters/logo). É pública de propósito: as telas
+ * de autenticação exibem a logo antes de haver token. O backend só lê o
+ * arquivo gravado dentro da pasta de logos — nunca um caminho arbitrário.
+ */
+export const publicLogoUrl = `${API_URL}/parameters/logo`
 
 export const parametersApi = {
   /** Nome, endereço e logo — liberado a qualquer autenticado. */
@@ -130,6 +154,13 @@ export const parametersApi = {
 
   update: (input: UpdateParametersInput) =>
     request<CompanyParameters>('/parameters', { method: 'PATCH', body: input }),
+
+  /** Envia a logo da empresa (superuser). */
+  uploadLogo: (input: UploadLogoInput) =>
+    request<UploadLogoResult>('/parameters/logo', { method: 'POST', body: input }),
+
+  /** Remove a logo da empresa (superuser). */
+  removeLogo: () => request<RemoveLogoResult>('/parameters/logo', { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------

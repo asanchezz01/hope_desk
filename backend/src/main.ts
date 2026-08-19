@@ -12,6 +12,11 @@ import { PrismaService } from './prisma/prisma.service';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
+    // O parser padrão do Nest aceita só 100kb de JSON; a logo de até 1MB chega
+    // em base64 (~1,4MB) e morreria como 413 antes do serviço aplicar o seu
+    // teto de 1MB (um 400). Desligamos o padrão e registramos um com teto
+    // suficiente em app-setup.ts (compartilhado com o harness).
+    bodyParser: false,
   });
 
   const configService = app.get(ConfigService);

@@ -69,3 +69,50 @@ export class CompanyParametersResponse extends PublicCompanyParametersResponse {
   @ApiProperty({ description: 'AAAA-MM-DD.' })
   hoursBankClosingDate!: string;
 }
+
+/**
+ * Upload da logo em base64 (o stack atual não usa multipart; o JSON carrega a
+ * imagem codificada, o que dispensa multer e pref-light de CORS).
+ */
+export class UploadLogoDto {
+  @ApiPropertyOptional({ example: 'logo.png' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(200)
+  fileName?: string;
+
+  @ApiProperty({ example: 'image/png' })
+  @Transform(trim)
+  @IsString({ message: 'Informe o contentType da imagem.' })
+  @Matches(/^image\/(png|jpeg|webp|gif|svg\+xml)$/, {
+    message:
+      'Tipo de imagem não suportado para a logo (use PNG, JPEG, WebP, GIF ou SVG).',
+  })
+  contentType!: string;
+
+  @ApiProperty({
+    description:
+      'Conteúdo base64 da imagem (aceita também o prefixo data:...;base64,). Máx. 1MB.',
+  })
+  @IsString({ message: 'Envie a imagem da logo em base64 (dataBase64).' })
+  dataBase64!: string;
+}
+
+/** Resultado do upload da logo. */
+export class UploadCompanyLogoResponse {
+  @ApiProperty({ example: 'logo.png' })
+  companyLogo!: string;
+
+  @ApiProperty({ example: 4096, description: 'Tamanho em bytes gravado.' })
+  size!: number;
+
+  @ApiProperty({ example: 'image/png' })
+  contentType!: string;
+}
+
+/** Resultado da remoção da logo (volta a marca padrão). */
+export class RemoveCompanyLogoResponse {
+  @ApiProperty({ example: '', description: 'Parâmetro company_logo limpo.' })
+  companyLogo!: string;
+}

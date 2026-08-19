@@ -20,14 +20,6 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn() }),
 }))
 
-// O painel de comandos é só Web e abre um Modal com atalho de teclado; fora do
-// escopo deste teste.
-jest.mock('../components/CommandPalette', () => ({
-  __esModule: true,
-  default: () => null,
-  CommandPaletteHint: () => null,
-}))
-
 const mockSignOut = jest.fn()
 const mockUser = {
   id: 2,
@@ -40,6 +32,12 @@ const mockUser = {
 
 jest.mock('../context/AuthProvider', () => ({
   useAuth: () => ({ user: mockUser, signOut: mockSignOut }),
+}))
+
+// O shell agora busca a logo da empresa; num ambiente de teste node a chamada
+// de `fetch` real não interessa e nem existe — devolvemos a marca padrão.
+jest.mock('../hooks/useCompanyLogo', () => ({
+  useCompanyLogo: () => null,
 }))
 
 // O preset do React Native já substitui `useWindowDimensions` por um valor

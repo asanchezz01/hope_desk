@@ -41,3 +41,4 @@ backups/
 
 # Configuração local do Claude Code: preferências desta máquina, não do projeto.
 .claude/settings.local.json
+/graphify-out

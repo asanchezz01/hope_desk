@@ -1189,7 +1189,7 @@ lista, com o desfecho de cada item.
 | atualização otimista com rollback | ✅ implementado | só na mudança de status |
 | pull-to-refresh | ✅ implementado | listagem de chamados |
 | filtros salvos | ✅ implementado | período e situação, não a busca |
-| command palette na Web | ✅ implementado | Ctrl/Cmd+K, comandos derivados da navegação |
+| command palette na Web | ❌ removida | duplicava o menu sanduíche, que já lista tudo em qualquer largura |
 | métricas | ⚠️ parcial | há uma linha por requisição concluída, com método, rota, status e duração — o suficiente para responder "qual rota está lenta" e "quantos 4xx". Um `/metrics` Prometheus exigiria um coletor: serviço novo, que o prompt manda não introduzir sem necessidade documentada |
 | central de notificações | ❌ não implementado | exige persistir notificação por usuário (tabela nova + estado de leitura). É funcionalidade nova, não endurecimento |
 | realtime | ❌ não implementado | WebSocket com uma instância é viável, mas com mais de uma exige barramento (Redis/pub-sub) — o serviço adicional que o prompt restringe |
@@ -1302,7 +1302,6 @@ depois, no próprio corpo. Verificado reproduzindo o cenário exato
 | `src/hooks/useTickets.ts` | mudança de status otimista com rollback |
 | `src/storage/preferences.ts` | filtros salvos, validados na leitura |
 | `app/index.tsx` | pull-to-refresh e hidratação dos filtros |
-| `src/components/CommandPalette/` | Ctrl/Cmd+K na Web, com filtro sem acento |
 | `app/_layout.tsx` | gate corrigido: o `Slot` é montado em todo render |
 
 No backend, além do que já foi descrito: `CorrelationIdMiddleware` registra uma
@@ -1330,9 +1329,9 @@ Pontos que valem registro:
 - **Filtros lidos do disco são validados**: o que está gravado foi escrito por
   uma versão anterior do aplicativo, e um `month` ausente iria direto para a
   query da API, que responderia 400 na primeira abertura depois da atualização.
-- **A command palette é só Web**, e seus comandos saem da mesma lista da
-  navegação lateral, já filtrada por perfil — uma lista paralela divergiria na
-  primeira rota nova e ofereceria um destino que a API recusa.
+- **A command palette foi removida depois.** Seus destinos eram um subconjunto
+  do menu sanduíche (`AppMenu`), que aparece em qualquer largura; o botão
+  "Ctrl K" no cabeçalho era sua única porta de entrada visível.
 
 ### Um vazamento de teste no frontend, também encontrado nesta fase
 

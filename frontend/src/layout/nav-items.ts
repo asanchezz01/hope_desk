@@ -24,10 +24,15 @@ export function navItemsFor(user: ApiUser | null): NavItem[] {
   const isSuperuser = user?.isSuperuser ?? false
 
   return [
-    { href: '/analytics', label: 'Painel' },
-    { href: '/', label: 'Chamados' },
-    { href: '/reports', label: 'Relatórios' },
-    { href: '/admin', label: 'Administração', visible: isTechnician || isSuperuser },
+    { href: '/analytics', label: 'Painel', icon: 'gauge' },
+    { href: '/', label: 'Chamados', icon: 'ticket' },
+    { href: '/reports', label: 'Relatórios', icon: 'file-lines' },
+    {
+      href: '/admin',
+      label: 'Administração',
+      icon: 'screwdriver-wrench',
+      visible: isTechnician || isSuperuser,
+    },
   ]
 }
 
@@ -56,13 +61,33 @@ export function menuItemsFor(user: ApiUser | null): MenuItem[] {
   const isSuperuser = user?.isSuperuser ?? false
 
   return [
-    { href: '/analytics', label: 'Painel de Indicadores' },
-    { href: '/', label: 'Chamados' },
-    { href: '/reports', label: 'Relatórios' },
-    { href: '/admin/parameters', label: 'Parâmetros da Empresa', visible: isSuperuser },
-    { href: '/admin/modules', label: 'Módulos do Sistema', visible: isSuperuser },
-    { href: '/admin/payments', label: 'Cadastro de Pagamentos', visible: isSuperuser },
-    { href: '/admin/users', label: 'Gerenciar Usuários', visible: isTechnician || isSuperuser },
-    { href: '/change-password', label: 'Alterar Senha' },
+    { href: '/analytics', label: 'Painel de Indicadores', icon: 'gauge' },
+    { href: '/', label: 'Chamados', icon: 'ticket' },
+    { href: '/reports', label: 'Relatórios', icon: 'file-lines' },
+    {
+      href: '/admin/parameters',
+      label: 'Parâmetros da Empresa',
+      icon: 'building',
+      visible: isSuperuser,
+    },
+    {
+      href: '/admin/modules',
+      label: 'Módulos do Sistema',
+      icon: 'puzzle-piece',
+      visible: isSuperuser,
+    },
+    {
+      href: '/admin/payments',
+      label: 'Cadastro de Pagamentos',
+      icon: 'credit-card',
+      visible: isSuperuser,
+    },
+    {
+      href: '/admin/users',
+      label: 'Gerenciar Usuários',
+      icon: 'users',
+      visible: isTechnician || isSuperuser,
+    },
+    { href: '/change-password', label: 'Alterar Senha', icon: 'key' },
   ]
 }
