@@ -258,7 +258,7 @@ export default function TicketsScreen() {
               value={
                 summary && monthlySummary.data
                   ? formatHours(
-                      summary.periodTotalHours + monthlySummary.data.externalTicketActivityHours,
+                      summary.periodTotalHours + monthlySummary.data.externalTicketActivityHours
                     )
                   : list.isLoading || monthlyLoading
                     ? '…'
