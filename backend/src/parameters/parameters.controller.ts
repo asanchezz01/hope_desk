@@ -22,8 +22,10 @@ import {
   CompanyParametersResponse,
   PublicCompanyParametersResponse,
   RemoveCompanyLogoResponse,
+  RemoveCompanyLogoDarkResponse,
   UpdateCompanyParametersDto,
   UploadCompanyLogoResponse,
+  UploadCompanyLogoDarkResponse,
   UploadLogoDto,
 } from './dto/parameter.dto';
 import { ParametersService } from './parameters.service';
@@ -102,6 +104,26 @@ export class ParametersController {
     response.send(logo.buffer);
   }
 
+  @Get('logo/dark')
+  @Public()
+  @ApiOperation({ summary: 'Imagem da logo para o tema escuro (público, sem token)' })
+  @ApiProduces('image/*')
+  async getDarkLogo(@Res() response: Response): Promise<void> {
+    const logo = await this.parametersService.getLogoFile('dark');
+    if (!logo) {
+      response
+        .status(404)
+        .json({ statusCode: 404, message: 'Logo escura não configurada.' });
+      return;
+    }
+    response.setHeader('Content-Type', logo.contentType);
+    response.setHeader(
+      'Cache-Control',
+      'public, max-age=300, stale-while-revalidate=86400',
+    );
+    response.send(logo.buffer);
+  }
+
   @Post('logo')
   // `@Post` devolve 201 por padrão; o contrato (e o `@ApiOkResponse` abaixo)
   // declara 200, alinhado ao resto deste controlador.
@@ -113,7 +135,22 @@ export class ParametersController {
   })
   @ApiOkResponse({ type: UploadCompanyLogoResponse })
   uploadLogo(@Body() dto: UploadLogoDto): Promise<UploadCompanyLogoResponse> {
-    return this.parametersService.uploadLogo(dto);
+    return this.parametersService.uploadLogo(dto) as Promise<UploadCompanyLogoResponse>;
+  }
+
+  @Post('logo/dark')
+  @HttpCode(200)
+  @RequiresSuperuser()
+  @ApiOperation({
+    summary: 'Envia a logo otimizada para o tema escuro (base64, superuser)',
+    description: 'Aceita PNG, JPEG, WebP, GIF ou SVG de até 1MB em base64.',
+  })
+  @ApiOkResponse({ type: UploadCompanyLogoDarkResponse })
+  uploadDarkLogo(@Body() dto: UploadLogoDto): Promise<UploadCompanyLogoDarkResponse> {
+    return this.parametersService.uploadLogo(
+      dto,
+      'dark',
+    ) as Promise<UploadCompanyLogoDarkResponse>;
   }
 
   @Delete('logo')
@@ -124,6 +161,16 @@ export class ParametersController {
   })
   @ApiOkResponse({ type: RemoveCompanyLogoResponse })
   removeLogo(): Promise<RemoveCompanyLogoResponse> {
-    return this.parametersService.deleteLogo();
+    return this.parametersService.deleteLogo() as Promise<RemoveCompanyLogoResponse>;
+  }
+
+  @Delete('logo/dark')
+  @RequiresSuperuser()
+  @ApiOperation({ summary: 'Remove a logo específica do tema escuro (superuser)' })
+  @ApiOkResponse({ type: RemoveCompanyLogoDarkResponse })
+  removeDarkLogo(): Promise<RemoveCompanyLogoDarkResponse> {
+    return this.parametersService.deleteLogo(
+      'dark',
+    ) as Promise<RemoveCompanyLogoDarkResponse>;
   }
 }

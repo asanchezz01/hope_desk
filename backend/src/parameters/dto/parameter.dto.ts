@@ -32,6 +32,15 @@ export class UpdateCompanyParametersDto {
   companyLogo?: string;
 
   @ApiPropertyOptional({
+    description: 'Caminho relativo da logo para o modo escuro. Pode ser vazio.',
+  })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(1000)
+  companyLogoDark?: string;
+
+  @ApiPropertyOptional({
     description: 'Franquia mensal de horas. Aceita vírgula decimal.',
     example: '16',
   })
@@ -59,6 +68,7 @@ export class PublicCompanyParametersResponse {
   @ApiProperty() companyName!: string;
   @ApiProperty() companyAddress!: string;
   @ApiProperty() companyLogo!: string;
+  @ApiProperty() companyLogoDark!: string;
 }
 
 /** Conjunto completo, restrito a superuser. */
@@ -115,4 +125,22 @@ export class UploadCompanyLogoResponse {
 export class RemoveCompanyLogoResponse {
   @ApiProperty({ example: '', description: 'Parâmetro company_logo limpo.' })
   companyLogo!: string;
+}
+
+/** Resultado do upload da logo otimizada para o tema escuro. */
+export class UploadCompanyLogoDarkResponse {
+  @ApiProperty({ example: 'logo-dark.png' })
+  companyLogoDark!: string;
+
+  @ApiProperty({ example: 4096, description: 'Tamanho em bytes gravado.' })
+  size!: number;
+
+  @ApiProperty({ example: 'image/png' })
+  contentType!: string;
+}
+
+/** Resultado da remoção da logo do tema escuro. */
+export class RemoveCompanyLogoDarkResponse {
+  @ApiProperty({ example: '', description: 'Parâmetro company_logo_dark limpo.' })
+  companyLogoDark!: string;
 }

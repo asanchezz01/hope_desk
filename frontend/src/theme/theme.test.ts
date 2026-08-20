@@ -50,6 +50,13 @@ describe('contraste', () => {
     ['escuro', darkTheme],
   ]
 
+  it('as duas paletas da logo mantêm contraste AA nos respectivos temas', () => {
+    expect(contrast('#0c4e9a', lightTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast('#234783', lightTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast('#f3f4f6', darkTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast('#6aa9e9', darkTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
+  })
+
   describe.each(themes)('tema %s', (_name, theme) => {
     it('texto principal sobre o fundo e sobre o card', () => {
       expect(contrast(theme.textPrimary, theme.background)).toBeGreaterThanOrEqual(AA_TEXT)

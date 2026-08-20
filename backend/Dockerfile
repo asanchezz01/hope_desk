@@ -53,7 +53,9 @@ RUN npx prisma generate
 COPY --from=builder /app/dist ./dist/
 COPY docker-entrypoint.sh ./
 
-RUN chmod +x docker-entrypoint.sh && chown -R node:node /app
+RUN mkdir -p /app/media/logo \
+    && chmod +x docker-entrypoint.sh \
+    && chown -R node:node /app
 
 USER node
 

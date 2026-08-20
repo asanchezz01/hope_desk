@@ -416,6 +416,7 @@ describe('Domínios administrativos (Fase 03)', () => {
           expect(response.body).toHaveProperty('companyName');
           expect(response.body).toHaveProperty('companyAddress');
           expect(response.body).toHaveProperty('companyLogo');
+          expect(response.body).toHaveProperty('companyLogoDark');
           // Não expõe franquia nem data de fechamento.
           expect(response.body.monthlyHoursAllowance).toBeUndefined();
           expect(response.body.hoursBankClosingDate).toBeUndefined();
@@ -434,12 +435,13 @@ describe('Domínios administrativos (Fase 03)', () => {
           companyName: 'Hope Desk',
           companyAddress: 'Endereço não informado',
           companyLogo: '',
+          companyLogoDark: '',
           monthlyHoursAllowance: '16',
           hoursBankClosingDate: '2000-01-01',
         });
       });
 
-      it('cria as 5 chaves na primeira leitura (ensure_system_parameters)', async () => {
+      it('cria as 6 chaves na primeira leitura (ensure_system_parameters)', async () => {
         await request(app.getHttpServer())
           .get(`${API}/parameters`)
           .set('Authorization', `Bearer ${superuserToken}`)
@@ -452,6 +454,7 @@ describe('Domínios administrativos (Fase 03)', () => {
         expect(keys.map((k) => k.key)).toEqual([
           'company_address',
           'company_logo',
+          'company_logo_dark',
           'company_name',
           'hours_bank_closing_date',
           'monthly_hours_allowance',
@@ -494,6 +497,7 @@ describe('Domínios administrativos (Fase 03)', () => {
             companyName: 'Nova Empresa',
             companyAddress: 'Rua Nova, 123',
             companyLogo: 'https://example.com/logo.png',
+            companyLogoDark: 'logo-dark.png',
             monthlyHoursAllowance: '20',
             hoursBankClosingDate: '2026-01-15',
           })
@@ -503,6 +507,7 @@ describe('Domínios administrativos (Fase 03)', () => {
           companyName: 'Nova Empresa',
           companyAddress: 'Rua Nova, 123',
           companyLogo: 'https://example.com/logo.png',
+          companyLogoDark: 'logo-dark.png',
           // Sempre 2 casas, como f"{value:.2f}" do legado.
           monthlyHoursAllowance: '20.00',
           hoursBankClosingDate: '2026-01-15',

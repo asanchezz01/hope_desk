@@ -103,6 +103,7 @@ export interface PublicCompanyParameters {
   companyName: string
   companyAddress: string
   companyLogo: string
+  companyLogoDark: string
 }
 
 export interface CompanyParameters extends PublicCompanyParameters {
@@ -129,13 +130,15 @@ export interface UploadLogoInput {
 }
 
 export interface UploadLogoResult {
-  companyLogo: string
+  companyLogo?: string
+  companyLogoDark?: string
   size: number
   contentType: string
 }
 
 export interface RemoveLogoResult {
-  companyLogo: string
+  companyLogo?: string
+  companyLogoDark?: string
 }
 
 /**
@@ -144,6 +147,7 @@ export interface RemoveLogoResult {
  * arquivo gravado dentro da pasta de logos — nunca um caminho arbitrário.
  */
 export const publicLogoUrl = `${API_URL}/parameters/logo`
+export const publicDarkLogoUrl = `${API_URL}/parameters/logo/dark`
 
 export const parametersApi = {
   /** Nome, endereço e logo — liberado a qualquer autenticado. */
@@ -159,8 +163,15 @@ export const parametersApi = {
   uploadLogo: (input: UploadLogoInput) =>
     request<UploadLogoResult>('/parameters/logo', { method: 'POST', body: input }),
 
+  /** Envia a variante com contraste para o tema escuro (superuser). */
+  uploadDarkLogo: (input: UploadLogoInput) =>
+    request<UploadLogoResult>('/parameters/logo/dark', { method: 'POST', body: input }),
+
   /** Remove a logo da empresa (superuser). */
   removeLogo: () => request<RemoveLogoResult>('/parameters/logo', { method: 'DELETE' }),
+
+  /** Remove somente a variante do tema escuro (superuser). */
+  removeDarkLogo: () => request<RemoveLogoResult>('/parameters/logo/dark', { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------

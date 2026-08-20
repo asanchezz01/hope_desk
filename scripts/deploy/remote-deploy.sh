@@ -88,6 +88,11 @@ if ! docker network inspect hopecash_proxy >/dev/null 2>&1; then
   exit 1
 fi
 
+# Antes de recriar a API, preserva a logo que ainda possa estar no filesystem
+# efêmero do container antigo. A rotina não repete o backup após a instalação
+# v4, identificada por um marcador dentro do volume persistente.
+bash scripts/deploy/install-brand-logos.sh backup
+
 log "construindo e subindo os serviços"
 docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans
 
@@ -111,6 +116,20 @@ for attempt in $(seq 1 30); do
   fi
   sleep 5
 done
+
+# Instala os ativos oficiais uma única vez, já com API e migrations prontas. O
+# marcador fica no volume de logos, então deploys futuros respeitam qualquer
+# troca feita pela tela de parâmetros.
+bash scripts/deploy/install-brand-logos.sh install
+
+for logo_path in logo logo/dark; do
+  if ! curl -fsS -m 10 -o /dev/null \
+    "http://127.0.0.1:${API_PORT}/api/v1/parameters/${logo_path}"; then
+    log "ERRO: a imagem /parameters/${logo_path} não foi servida após a instalação"
+    exit 1
+  fi
+done
+log "logos clara e escura respondendo pela API"
 
 WEB_PORT="$(grep -E '^WEB_HOST_PORT=' .env | cut -d= -f2- || echo 8093)"
 WEB_PORT="${WEB_PORT:-8093}"

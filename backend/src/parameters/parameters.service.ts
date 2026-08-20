@@ -44,6 +44,13 @@ export interface LogoFile {
   size: number;
 }
 
+export type LogoVariant = 'light' | 'dark';
+
+const LOGO_VARIANTS = {
+  light: { key: 'company_logo', stem: 'logo' },
+  dark: { key: 'company_logo_dark', stem: 'logo-dark' },
+} as const satisfies Record<LogoVariant, { key: SystemParameterKey; stem: string }>;
+
 async function rmIfExists(target: string): Promise<void> {
   try {
     await fs.promises.unlink(target);
@@ -127,11 +134,13 @@ export class ParametersService {
       'company_name',
       'company_address',
       'company_logo',
+      'company_logo_dark',
     ]);
     return {
       companyName: values.company_name,
       companyAddress: values.company_address,
       companyLogo: values.company_logo,
+      companyLogoDark: values.company_logo_dark,
     };
   }
 
@@ -141,6 +150,7 @@ export class ParametersService {
       'company_name',
       'company_address',
       'company_logo',
+      'company_logo_dark',
       'monthly_hours_allowance',
       'hours_bank_closing_date',
     ]);
@@ -149,6 +159,7 @@ export class ParametersService {
       companyName: values.company_name,
       companyAddress: values.company_address,
       companyLogo: values.company_logo,
+      companyLogoDark: values.company_logo_dark,
       monthlyHoursAllowance: values.monthly_hours_allowance,
       hoursBankClosingDate: values.hours_bank_closing_date,
     };
@@ -166,6 +177,9 @@ export class ParametersService {
     if (dto.companyLogo !== undefined) {
       // Pode ser vazio: significa "sem logo", como no legado.
       updates.set('company_logo', dto.companyLogo);
+    }
+    if (dto.companyLogoDark !== undefined) {
+      updates.set('company_logo_dark', dto.companyLogoDark);
     }
     if (dto.monthlyHoursAllowance !== undefined) {
       updates.set(
@@ -230,7 +244,11 @@ export class ParametersService {
    */
   async uploadLogo(
     dto: UploadLogoDto,
-  ): Promise<{ companyLogo: string; size: number; contentType: string }> {
+    variant: LogoVariant = 'light',
+  ): Promise<
+    | { companyLogo: string; size: number; contentType: string }
+    | { companyLogoDark: string; size: number; contentType: string }
+  > {
     const extension = LOGO_EXTENSIONS[dto.contentType];
     if (!extension) {
       throw new BadRequestException(
@@ -251,40 +269,47 @@ export class ParametersService {
 
     const dir = this.logoDir;
     await fs.promises.mkdir(dir, { recursive: true });
-    await this.clearLogoFiles();
-    const fileName = `logo.${extension}`;
+    const config = LOGO_VARIANTS[variant];
+    await this.clearLogoFiles(variant);
+    const fileName = `${config.stem}.${extension}`;
     await fs.promises.writeFile(path.join(dir, fileName), buffer);
 
-    await this.upsertLogo(fileName);
+    await this.upsertLogo(variant, fileName);
     this.audit.record({
       action: AUDIT_ACTIONS.PARAMETERS_UPDATED,
       entityType: 'parameters',
-      metadata: { keys: 'company_logo', fileName, size: buffer.length },
+      metadata: { keys: config.key, fileName, size: buffer.length },
     });
 
     return {
-      companyLogo: fileName,
+      [variant === 'light' ? 'companyLogo' : 'companyLogoDark']: fileName,
       size: buffer.length,
       contentType: dto.contentType,
-    };
+    } as
+      | { companyLogo: string; size: number; contentType: string }
+      | { companyLogoDark: string; size: number; contentType: string };
   }
 
   /** Remove a logo gravada e limpa o parâmetro (volta a marca padrão "HD"). */
-  async deleteLogo(): Promise<{ companyLogo: string }> {
-    await this.clearLogoFiles();
-    await this.upsertLogo('');
+  async deleteLogo(
+    variant: LogoVariant = 'light',
+  ): Promise<{ companyLogo: string } | { companyLogoDark: string }> {
+    const config = LOGO_VARIANTS[variant];
+    await this.clearLogoFiles(variant);
+    await this.upsertLogo(variant, '');
     this.audit.record({
       action: AUDIT_ACTIONS.PARAMETERS_UPDATED,
       entityType: 'parameters',
-      metadata: { keys: 'company_logo', removed: true },
+      metadata: { keys: config.key, removed: true },
     });
-    return { companyLogo: '' };
+    return variant === 'light' ? { companyLogo: '' } : { companyLogoDark: '' };
   }
 
   /** Lê a logo gravada para streaming (ou `null` quando não há). */
-  async getLogoFile(): Promise<LogoFile | null> {
+  async getLogoFile(variant: LogoVariant = 'light'): Promise<LogoFile | null> {
+    const config = LOGO_VARIANTS[variant];
     const record = await this.prisma.systemParameter.findUnique({
-      where: { key: 'company_logo' },
+      where: { key: config.key },
     });
     const filePath = record ? this.resolveLogoPath(record.value) : null;
     if (!filePath) {
@@ -299,16 +324,18 @@ export class ParametersService {
     };
   }
 
-  private async upsertLogo(value: string): Promise<void> {
+  private async upsertLogo(variant: LogoVariant, value: string): Promise<void> {
+    const key = LOGO_VARIANTS[variant].key;
     await this.prisma.systemParameter.upsert({
-      where: { key: 'company_logo' as SystemParameterKey },
-      create: { key: 'company_logo', value },
+      where: { key },
+      create: { key, value },
       update: { value },
     });
   }
 
-  private async clearLogoFiles(): Promise<void> {
+  private async clearLogoFiles(variant: LogoVariant): Promise<void> {
     const dir = this.logoDir;
+    const stem = LOGO_VARIANTS[variant].stem.replace('-', '\\-');
     let entries: string[];
     try {
       entries = await fs.promises.readdir(dir);
@@ -316,7 +343,7 @@ export class ParametersService {
       return; // pasta inexistente
     }
     for (const entry of entries) {
-      if (/^logo\./.test(entry)) {
+      if (new RegExp(`^${stem}\\.`).test(entry)) {
         await rmIfExists(path.join(dir, entry));
       }
     }

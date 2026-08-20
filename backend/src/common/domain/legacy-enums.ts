@@ -32,6 +32,7 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 /** Chaves de `system_parameter` usadas pelo legado, com os mesmos defaults. */
 export const SYSTEM_PARAMETER_DEFAULTS = {
   company_logo: '',
+  company_logo_dark: '',
   company_name: 'Hope Desk',
   company_address: 'Endereço não informado',
   monthly_hours_allowance: '16',

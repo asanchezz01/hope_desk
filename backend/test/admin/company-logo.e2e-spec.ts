@@ -86,26 +86,29 @@ describe('Logo da empresa (parâmetros)', () => {
     return response.body.accessToken;
   }
 
-  function upload(payload: {
-    contentType?: string;
-    dataBase64?: string;
-    fileName?: string;
-  }) {
+  function upload(
+    payload: {
+      contentType?: string;
+      dataBase64?: string;
+      fileName?: string;
+    },
+    variant: 'light' | 'dark' = 'light',
+  ) {
     return request(app.getHttpServer())
-      .post(`${API}/parameters/logo`)
+      .post(`${API}/parameters/logo${variant === 'dark' ? '/dark' : ''}`)
       .set('Authorization', `Bearer ${superuserToken}`)
       .send(payload);
   }
 
   /** GET da logo como binary (funciona tanto para 200 quanto para 401/403/404). */
-  async function fetchLogo(): Promise<{
+  async function fetchLogo(variant: 'light' | 'dark' = 'light'): Promise<{
     status: number;
     contentType: string;
     contentLength: string;
     body: Buffer;
   }> {
     const res = await request(app.getHttpServer())
-      .get(`${API}/parameters/logo`)
+      .get(`${API}/parameters/logo${variant === 'dark' ? '/dark' : ''}`)
       .buffer(true)
       .parse((response, callback) => {
         const chunks: Buffer[] = [];
@@ -218,6 +221,32 @@ describe('Logo da empresa (parâmetros)', () => {
       expect(entries).toEqual(['logo.png']);
     });
 
+    it('grava a variante escura sem substituir a logo clara', async () => {
+      await upload({ contentType: 'image/png', dataBase64: PNG_1PX_BASE64 }).expect(
+        200,
+      );
+      const response = await upload(
+        { contentType: 'image/png', dataBase64: PNG_1PX_BASE64 },
+        'dark',
+      ).expect(200);
+
+      expect(response.body).toEqual({
+        companyLogoDark: 'logo-dark.png',
+        size: PNG_1PX_BUFFER.length,
+        contentType: 'image/png',
+      });
+      expect((await fs.promises.readdir(logoDir)).sort()).toEqual([
+        'logo-dark.png',
+        'logo.png',
+      ]);
+      expect((await fetchLogo('dark')).body.equals(PNG_1PX_BUFFER)).toBe(true);
+
+      const parameter = await prisma.systemParameter.findUnique({
+        where: { key: 'company_logo_dark' },
+      });
+      expect(parameter?.value).toBe('logo-dark.png');
+    });
+
     it.each(['image/bmp', 'image/tiff', 'text/plain'])(
       'rejeita tipo não suportado: %s',
       async (contentType) => {
@@ -326,6 +355,26 @@ describe('Logo da empresa (parâmetros)', () => {
         .delete(`${API}/parameters/logo`)
         .set('Authorization', `Bearer ${superuserToken}`)
         .expect(200);
+    });
+
+    it('remove a variante escura sem apagar a logo clara', async () => {
+      await upload({ contentType: 'image/png', dataBase64: PNG_1PX_BASE64 }).expect(
+        200,
+      );
+      await upload(
+        { contentType: 'image/png', dataBase64: PNG_1PX_BASE64 },
+        'dark',
+      ).expect(200);
+
+      const response = await request(app.getHttpServer())
+        .delete(`${API}/parameters/logo/dark`)
+        .set('Authorization', `Bearer ${superuserToken}`)
+        .expect(200);
+
+      expect(response.body).toEqual({ companyLogoDark: '' });
+      expect((await fs.promises.readdir(logoDir)).sort()).toEqual(['logo.png']);
+      expect((await fetchLogo()).status).toBe(200);
+      expect((await fetchLogo('dark')).status).toBe(404);
     });
   });
 });

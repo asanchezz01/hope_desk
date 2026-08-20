@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
-import { publicLogoUrl } from '../api/admin'
+import { publicDarkLogoUrl, publicLogoUrl } from '../api/admin'
+import { useIsDark } from '../theme/ThemeContext'
 
 /**
  * URL da logo da empresa para o `<img>` do {@link CompanyLogo}.
@@ -15,24 +16,33 @@ import { publicLogoUrl } from '../api/admin'
  * ou remover a logo, chame {@link refreshCompanyLogo} para furar esse cache.
  */
 export function useCompanyLogo(): string {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  const isDark = useIsDark()
+  const urls = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return urls[isDark ? 'dark' : 'light']
 }
 
-let currentUrl = publicLogoUrl
+type LogoVariant = 'light' | 'dark'
+
+let currentUrls: Record<LogoVariant, string> = {
+  light: publicLogoUrl,
+  dark: publicDarkLogoUrl,
+}
 const listeners = new Set<() => void>()
 
 /**
  * Aponta todos os cabeçalhos para uma URL nova (a logo mudou), furando o cache
  * do navegador. Devolve a URL já versionada, para quem quiser exibi-la direto.
  */
-export function refreshCompanyLogo(): string {
-  currentUrl = `${publicLogoUrl}?v=${Date.now()}`
+export function refreshCompanyLogo(variant: LogoVariant = 'light'): string {
+  const baseUrl = variant === 'dark' ? publicDarkLogoUrl : publicLogoUrl
+  const nextUrl = `${baseUrl}?v=${Date.now()}`
+  currentUrls = { ...currentUrls, [variant]: nextUrl }
   listeners.forEach((notify) => notify())
-  return currentUrl
+  return nextUrl
 }
 
-function getSnapshot(): string {
-  return currentUrl
+function getSnapshot(): Record<LogoVariant, string> {
+  return currentUrls
 }
 
 function subscribe(listener: () => void): () => void {

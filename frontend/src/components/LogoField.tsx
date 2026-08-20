@@ -10,6 +10,7 @@ import { loadLogoFile, selectImageFile } from './image-file'
 import type { SelectedImage } from './image-file.types'
 
 interface LogoFieldProps {
+  label?: string
   /** URL pública atual da logo (vazia/`null` → exibe o monograma). */
   currentUrl?: string | null
   onUpload?: (selected: SelectedImage) => void
@@ -17,6 +18,7 @@ interface LogoFieldProps {
   busy?: boolean
   removeBusy?: boolean
   error?: string | null
+  previewBackgroundColor?: string
 }
 
 /**
@@ -26,12 +28,14 @@ interface LogoFieldProps {
  * desabilitado — a operação é web-only.
  */
 export default function LogoField({
+  label = 'Logo da empresa',
   currentUrl,
   onUpload,
   onRemove,
   busy = false,
   removeBusy = false,
   error,
+  previewBackgroundColor,
 }: LogoFieldProps) {
   const theme = useTheme()
   const [localError, setLocalError] = useState<string | null>(null)
@@ -52,21 +56,26 @@ export default function LogoField({
   }
 
   return (
-    <View accessibilityLabel="Logo da empresa" style={styles.wrap}>
+    <View accessibilityLabel={label} style={styles.wrap}>
+      <Text style={[styles.label, { color: theme.textPrimary }]}>{label}</Text>
       <View style={styles.row}>
-        {hasLogo ? (
-          <CompanyLogo src={currentUrl} size={64} imageWidth={160} />
-        ) : (
-          <View
-            accessibilityLabel="Sem logo"
-            style={[
-              styles.placeholder,
-              { backgroundColor: theme.cardBg, borderColor: theme.border },
-            ]}
-          >
-            <Text style={[styles.placeholderText, { color: theme.textSecondary }]}>HD</Text>
-          </View>
-        )}
+        <View
+          style={[
+            styles.preview,
+            {
+              backgroundColor: previewBackgroundColor ?? theme.cardBg,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {hasLogo ? (
+            <CompanyLogo src={currentUrl} size={48} imageWidth={168} />
+          ) : (
+            <View accessibilityLabel="Sem logo" style={styles.placeholder}>
+              <Text style={[styles.placeholderText, { color: theme.textSecondary }]}>HD</Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.actions}>
           {onUpload ? (
@@ -107,16 +116,24 @@ export default function LogoField({
 
 const styles = {
   wrap: { gap: 10 } as const,
+  label: { fontSize: 14, fontWeight: '700' } as const,
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
   } as const,
-  placeholder: {
-    width: 64,
+  preview: {
+    width: 184,
     height: 64,
-    borderRadius: 32,
+    borderRadius: 10,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as const,
+  placeholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   } as const,

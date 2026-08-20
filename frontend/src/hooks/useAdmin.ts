@@ -141,15 +141,17 @@ export function useUpdateCompanyParameters() {
   })
 }
 
-export function useUploadCompanyLogo() {
+export function useUploadCompanyLogo(variant: 'light' | 'dark' = 'light') {
   return useMutation({
-    mutationFn: (input: UploadLogoInput) => parametersApi.uploadLogo(input),
+    mutationFn: (input: UploadLogoInput) =>
+      variant === 'dark' ? parametersApi.uploadDarkLogo(input) : parametersApi.uploadLogo(input),
   })
 }
 
-export function useRemoveCompanyLogo() {
+export function useRemoveCompanyLogo(variant: 'light' | 'dark' = 'light') {
   return useMutation({
-    mutationFn: () => parametersApi.removeLogo(),
+    mutationFn: () =>
+      variant === 'dark' ? parametersApi.removeDarkLogo() : parametersApi.removeLogo(),
   })
 }
 
