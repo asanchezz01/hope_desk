@@ -251,6 +251,21 @@ export default function TicketsScreen() {
             />
             <StatTile
               style={stacked}
+              accent={theme.chartSecondary}
+              label="Total de horas do mês"
+              value={
+                summary && monthlySummary.data
+                  ? formatHours(
+                      summary.periodTotalHours + monthlySummary.data.externalTicketActivityHours,
+                    )
+                  : list.isLoading || monthlyLoading
+                    ? '…'
+                    : '—'
+              }
+              hint="Criados no mês + lançados de outros meses"
+            />
+            <StatTile
+              style={stacked}
               accent={statusChartColor('resolvido', isDark)}
               label="Horas pagas no período selecionado"
               value={monthlyValue(monthlySummary.data?.paidHoursInMonth)}
