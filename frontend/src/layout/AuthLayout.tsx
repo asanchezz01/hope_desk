@@ -35,7 +35,7 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <CompanyLogo size={60} src={logoUrl} />
+        <CompanyLogo size={60} imageWidth={200} src={logoUrl} />
         <Text style={[styles.brand, { color: theme.textPrimary }]}>Hope Desk</Text>
 
         <Card style={styles.card}>

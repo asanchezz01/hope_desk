@@ -55,7 +55,7 @@ export default function LogoField({
     <View accessibilityLabel="Logo da empresa" style={styles.wrap}>
       <View style={styles.row}>
         {hasLogo ? (
-          <CompanyLogo src={currentUrl} size={64} />
+          <CompanyLogo src={currentUrl} size={64} imageWidth={160} />
         ) : (
           <View
             accessibilityLabel="Sem logo"

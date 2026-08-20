@@ -78,7 +78,7 @@ export default function AppShell({
     <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.brandRow}>
-          <CompanyLogo size={34} src={logoUrl} />
+          <CompanyLogo size={34} imageWidth={112} src={logoUrl} />
           <Text
             accessibilityRole="header"
             numberOfLines={1}
