@@ -36,6 +36,7 @@ export const SYSTEM_PARAMETER_DEFAULTS = {
   company_name: 'Hope Desk',
   company_address: 'Endereço não informado',
   monthly_hours_allowance: '16',
+  activity_hourly_rate: '0',
   hours_bank_closing_date: '2000-01-01',
 } as const;
 

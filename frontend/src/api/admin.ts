@@ -109,6 +109,8 @@ export interface PublicCompanyParameters {
 export interface CompanyParameters extends PublicCompanyParameters {
   /** String, não número: gravado com 2 casas, como `f"{value:.2f}"` do legado. */
   monthlyHoursAllowance: string
+  /** Valor cobrado por hora no relatório de atividades. */
+  activityHourlyRate: string
   /** `AAAA-MM-DD`. */
   hoursBankClosingDate: string
 }
@@ -119,6 +121,8 @@ export interface UpdateParametersInput {
   // A logo é tratada por upload (`uploadLogo`/`removeLogo`), não por texto.
   /** Aceita vírgula decimal, como o legado. Separador de milhar é rejeitado. */
   monthlyHoursAllowance?: string
+  /** Aceita vírgula decimal. Separador de milhar é rejeitado. */
+  activityHourlyRate?: string
   hoursBankClosingDate?: string
 }
 

@@ -64,6 +64,10 @@ export interface ActivityReport {
   tickets: ActivityReportTicketRow[];
   totalsByTechnician: TechnicianTotal[];
   totalHours: number;
+  /** Valor da hora configurado, com 2 casas decimais. */
+  hourlyRate: string;
+  /** Total de horas do período multiplicado pelo valor da hora. */
+  amountDue: string;
 }
 
 export interface ServicesReportRow {
@@ -112,8 +116,8 @@ export class ReportsService {
   ): Promise<ActivityReport> {
     const { periodStart, periodEnd } = this.resolveDatePeriod(startRaw, endRaw);
 
-    const [company, activities] = await Promise.all([
-      this.loadCompanyHeader(),
+    const [settings, activities] = await Promise.all([
+      this.loadActivityReportSettings(),
       this.prisma.activity.findMany({
         where: {
           endedAt: { gt: periodStart },
@@ -205,17 +209,28 @@ export class ReportsService {
           .localeCompare(right.technicianName.toLowerCase(), 'pt-BR'),
       );
 
+    // Usa exatamente o total arredondado exibido no relatório como base da cobrança.
+    const totalHours = round2(
+      tickets.reduce((total, row) => total + row.totalHours, 0),
+    );
+    const amountDue = new Prisma.Decimal(totalHours)
+      .mul(settings.hourlyRate)
+      .toDecimalPlaces(2)
+      .toFixed(2);
+
     return {
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       periodStartLabel: formatDayLabel(periodStart),
       // O legado exibe o último dia INCLUSIVO do intervalo.
       periodEndLabel: formatDayLabel(new Date(periodEnd.getTime() - 1000)),
-      company,
+      company: settings.company,
       tickets,
       totalsByTechnician,
       // Soma dos totais já arredondados, como o legado.
-      totalHours: round2(tickets.reduce((total, row) => total + row.totalHours, 0)),
+      totalHours,
+      hourlyRate: settings.hourlyRate,
+      amountDue,
     };
   }
 
@@ -321,6 +336,26 @@ export class ReportsService {
     };
   }
 
+  private async loadActivityReportSettings(): Promise<{
+    company: ReportCompanyHeader;
+    hourlyRate: string;
+  }> {
+    const values = await this.parameters.getMany([
+      'company_name',
+      'company_address',
+      'company_logo',
+      'activity_hourly_rate',
+    ]);
+    return {
+      company: {
+        companyName: values.company_name,
+        companyAddress: values.company_address,
+        companyLogo: this.parameters.resolveLogoPath(values.company_logo) ?? '',
+      },
+      hourlyRate: resolveConfiguredHourlyRate(values.activity_hourly_rate),
+    };
+  }
+
   /**
    * `resolve_date_period` do legado: intervalo de datas em hora de parede, com
    * o fim **inclusivo** (o dia final entra inteiro).
@@ -380,6 +415,18 @@ export class ReportsService {
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function resolveConfiguredHourlyRate(raw: string): string {
+  const normalized = raw.trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return '0.00';
+
+  try {
+    const value = new Prisma.Decimal(normalized);
+    return value.isNegative() ? '0.00' : value.toFixed(2);
+  } catch {
+    return '0.00';
+  }
 }
 
 function formatDayLabel(stored: Date): string {

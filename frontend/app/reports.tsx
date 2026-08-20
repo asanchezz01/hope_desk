@@ -11,15 +11,18 @@ import ErrorState from '../src/components/ErrorState'
 import Select from '../src/components/Select'
 import Skeleton from '../src/components/Skeleton'
 import StatTile from '../src/components/StatTile'
+import StatusBadge from '../src/components/StatusBadge'
 import { useToast } from '../src/components/Toast'
 import { useAuth } from '../src/context/AuthProvider'
 import { firstDayOfMonthIso, formatDecimal, formatHours, todayIsoDate } from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
+import { statusKeyFromRaw } from '../src/domain/ticket-status'
 import { useActivityReport, useReportPdf, useServicesReport } from '../src/hooks/useReports'
 import AppShell from '../src/layout/AppShell'
 import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
-import { useTheme } from '../src/theme/ThemeContext'
+import { useIsDark, useTheme } from '../src/theme/ThemeContext'
+import { statusChartColor } from '../src/theme/chart-palette'
 
 type Tab = 'activities' | 'services'
 
@@ -27,6 +30,7 @@ export default function Reports() {
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
   const toast = useToast()
+  const theme = useTheme()
 
   const [tab, setTab] = useState<Tab>('activities')
   const [{ currentYear, currentMonth }] = useState(() => {
@@ -71,7 +75,7 @@ export default function Reports() {
 
   return (
     <AppShell title="Relatórios" navItems={navItemsFor(user)} width="wide">
-      <Card>
+      <Card accent={theme.primary}>
         <View accessibilityRole="tablist" style={styles.tabs}>
           <TabButton
             label="Atividades por período"
@@ -176,17 +180,18 @@ type ActivityQuery = ReturnType<typeof useActivityReport>
 
 function ActivityReportView({ report }: { report: ActivityQuery }) {
   const theme = useTheme()
+  const isDark = useIsDark()
 
   if (report.isError && !report.data) {
     return (
-      <Card>
+      <Card accent={theme.danger}>
         <ErrorState error={report.error} onRetry={() => void report.refetch()} />
       </Card>
     )
   }
   if (!report.data) {
     return (
-      <Card>
+      <Card accent={theme.chartMagnitude}>
         <Skeleton height={120} radius={12} />
       </Card>
     )
@@ -196,19 +201,24 @@ function ActivityReportView({ report }: { report: ActivityQuery }) {
 
   return (
     <>
-      <Card>
+      <Card accent={theme.chartMagnitude}>
         <View style={styles.tiles}>
           <StatTile
             label="Total de horas"
             value={formatHours(data.totalHours)}
             hint={`${data.periodStartLabel} a ${data.periodEndLabel}`}
+            accent={theme.chartMagnitude}
           />
-          <StatTile label="Chamados" value={String(data.tickets.length)} />
+          <StatTile
+            label="Chamados"
+            value={String(data.tickets.length)}
+            accent={theme.chartSecondary}
+          />
         </View>
       </Card>
 
       {data.totalsByTechnician.length > 0 && (
-        <Card>
+        <Card accent={theme.chartMagnitude}>
           <Text
             accessibilityRole="header"
             style={[styles.sectionTitle, { color: theme.textPrimary }]}
@@ -227,37 +237,51 @@ function ActivityReportView({ report }: { report: ActivityQuery }) {
       )}
 
       {data.tickets.length === 0 ? (
-        <Card>
+        <Card accent={theme.muted}>
           <EmptyState
             title="Nenhuma atividade no período"
             description="Ajuste o intervalo de datas para ver os lançamentos."
           />
         </Card>
       ) : (
-        data.tickets.map((ticket) => (
-          <Card key={ticket.ticketId}>
-            <Text style={[styles.ticketTitle, { color: theme.textPrimary }]}>
-              #{ticket.ticketId} · {ticket.title}
-            </Text>
-            <Text style={[styles.ticketMeta, { color: theme.muted }]}>
-              {ticket.clientName} · {ticket.moduleName} · {formatHours(ticket.totalHours)}
-            </Text>
-            {ticket.activities.map((activity, index) => (
-              <View
-                key={`${ticket.ticketId}-${index}`}
-                style={[styles.activityRow, { borderTopColor: theme.border }]}
-              >
-                <Text style={[styles.activityNotes, { color: theme.textSecondary }]}>
-                  {activity.notes}
+        data.tickets.map((ticket) => {
+          // O card é pintado por status — a leitura rápida da fila. Como a cor
+          // não pode ser a ÚNICA portadora do estado, o `StatusBadge` repete o
+          // rótulo ao lado da faixa (a cor é atalho, não definição).
+          // `StatusBadge` e `statusChartColor` esperam a CHAVE, mas o
+          // relatório devolve o rótulo: `statusKeyFromRaw` normaliza.
+          const statusKey = statusKeyFromRaw(ticket.status)
+          const statusAccent = statusKey
+            ? statusChartColor(statusKey, isDark)
+            : theme.chartSecondary
+          return (
+            <Card key={ticket.ticketId} accent={statusAccent}>
+              <View style={styles.ticketHeader}>
+                <Text style={[styles.ticketTitle, { color: theme.textPrimary }]}>
+                  #{ticket.ticketId} · {ticket.title}
                 </Text>
-                <Text style={[styles.activityMeta, { color: theme.muted }]}>
-                  {activity.startedLabel} — {activity.endedLabel} · {formatHours(activity.hours)} ·{' '}
-                  {activity.technicianName}
-                </Text>
+                {statusKey ? <StatusBadge status={statusKey} /> : null}
               </View>
-            ))}
-          </Card>
-        ))
+              <Text style={[styles.ticketMeta, { color: theme.muted }]}>
+                {ticket.clientName} · {ticket.moduleName} · {formatHours(ticket.totalHours)}
+              </Text>
+              {ticket.activities.map((activity, index) => (
+                <View
+                  key={`${ticket.ticketId}-${index}`}
+                  style={[styles.activityRow, { borderTopColor: theme.border }]}
+                >
+                  <Text style={[styles.activityNotes, { color: theme.textSecondary }]}>
+                    {activity.notes}
+                  </Text>
+                  <Text style={[styles.activityMeta, { color: theme.muted }]}>
+                    {activity.startedLabel} — {activity.endedLabel} · {formatHours(activity.hours)}{' '}
+                    · {activity.technicianName}
+                  </Text>
+                </View>
+              ))}
+            </Card>
+          )
+        })
       )}
     </>
   )
@@ -270,14 +294,14 @@ function ServicesReportView({ report }: { report: ServicesQuery }) {
 
   if (report.isError && !report.data) {
     return (
-      <Card>
+      <Card accent={theme.danger}>
         <ErrorState error={report.error} onRetry={() => void report.refetch()} />
       </Card>
     )
   }
   if (!report.data) {
     return (
-      <Card>
+      <Card accent={theme.chartMagnitude}>
         <Skeleton height={120} radius={12} />
       </Card>
     )
@@ -287,18 +311,23 @@ function ServicesReportView({ report }: { report: ServicesQuery }) {
 
   return (
     <>
-      <Card>
+      <Card accent={theme.chartMagnitude}>
         <View style={styles.tiles}>
           <StatTile
             label="Total de horas"
             value={formatHours(data.totalHours)}
             hint={data.periodLabel}
+            accent={theme.chartMagnitude}
           />
-          <StatTile label="Lançamentos" value={String(data.rows.length)} />
+          <StatTile
+            label="Lançamentos"
+            value={String(data.rows.length)}
+            accent={theme.chartSecondary}
+          />
         </View>
       </Card>
 
-      <Card>
+      <Card accent={theme.chartSecondary}>
         {data.rows.length === 0 ? (
           <EmptyState
             title="Sem lançamentos no mês"
@@ -351,7 +380,13 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
-  ticketTitle: { fontSize: 15, fontWeight: '700' },
+  ticketHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  ticketTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   ticketMeta: { fontSize: 12, marginTop: 2 },
   activityRow: { paddingTop: 10, marginTop: 10, borderTopWidth: 1, gap: 3 },
   activityNotes: { fontSize: 14, lineHeight: 19 },

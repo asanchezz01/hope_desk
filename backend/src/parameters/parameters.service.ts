@@ -67,6 +67,7 @@ async function rmIfExists(target: string): Promise<void> {
  *   - valor vazio cai para o default;
  *   - todo valor sofre `.strip()`;
  *   - `monthly_hours_allowance` aceita vírgula e é gravado com 2 casas.
+ *   - `activity_hourly_rate` segue a mesma normalização decimal.
  */
 @Injectable()
 export class ParametersService {
@@ -152,6 +153,7 @@ export class ParametersService {
       'company_logo',
       'company_logo_dark',
       'monthly_hours_allowance',
+      'activity_hourly_rate',
       'hours_bank_closing_date',
     ]);
 
@@ -161,6 +163,7 @@ export class ParametersService {
       companyLogo: values.company_logo,
       companyLogoDark: values.company_logo_dark,
       monthlyHoursAllowance: values.monthly_hours_allowance,
+      activityHourlyRate: values.activity_hourly_rate,
       hoursBankClosingDate: values.hours_bank_closing_date,
     };
   }
@@ -186,6 +189,9 @@ export class ParametersService {
         'monthly_hours_allowance',
         normalizeHoursAllowance(dto.monthlyHoursAllowance),
       );
+    }
+    if (dto.activityHourlyRate !== undefined) {
+      updates.set('activity_hourly_rate', normalizeHourlyRate(dto.activityHourlyRate));
     }
     if (dto.hoursBankClosingDate !== undefined) {
       updates.set(
@@ -355,29 +361,44 @@ export class ParametersService {
  * com 2 casas — `f"{monthly_hours_allowance:.2f}"` do legado.
  */
 export function normalizeHoursAllowance(raw: string): string {
+  return normalizeNonNegativeDecimal(
+    raw,
+    'Informe a quantidade de horas de franquia mensal.',
+    'A franquia mensal deve ser um número válido maior ou igual a zero.',
+  );
+}
+
+/** Valor/hora usado para calcular o total devido no relatório de atividades. */
+export function normalizeHourlyRate(raw: string): string {
+  return normalizeNonNegativeDecimal(
+    raw,
+    'Informe o valor da hora.',
+    'O valor da hora deve ser um número válido maior ou igual a zero.',
+  );
+}
+
+function normalizeNonNegativeDecimal(
+  raw: string,
+  requiredMessage: string,
+  invalidMessage: string,
+): string {
   const normalized = raw.trim().replace(',', '.');
   if (!normalized) {
-    throw new BadRequestException('Informe a quantidade de horas de franquia mensal.');
+    throw new BadRequestException(requiredMessage);
   }
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
-    throw new BadRequestException(
-      'A franquia mensal deve ser um número válido maior ou igual a zero.',
-    );
+    throw new BadRequestException(invalidMessage);
   }
 
   let value: Prisma.Decimal;
   try {
     value = new Prisma.Decimal(normalized);
   } catch {
-    throw new BadRequestException(
-      'A franquia mensal deve ser um número válido maior ou igual a zero.',
-    );
+    throw new BadRequestException(invalidMessage);
   }
 
   if (value.isNegative()) {
-    throw new BadRequestException(
-      'A franquia mensal deve ser um número válido maior ou igual a zero.',
-    );
+    throw new BadRequestException(invalidMessage);
   }
 
   return value.toFixed(2);

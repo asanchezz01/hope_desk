@@ -2,6 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { ActivityReport, ServicesReport } from './reports.service';
 
+type TableColumn = {
+  header: string;
+  width: number;
+  align?: 'left' | 'right';
+};
+
 /**
  * Geração de PDF dos relatórios.
  *
@@ -26,6 +32,8 @@ export class ReportPdfService {
     muted: '#6b7280',
     line: '#d1d5db',
     zebra: '#f3f4f6',
+    activity: '#eaf2fb',
+    summary: '#eef5fc',
   };
 
   /** Relatório de atividades por intervalo, agrupado por chamado. */
@@ -51,45 +59,41 @@ export class ReportPdfService {
       this.ensureSpace(document, 120);
 
       document
+        .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor(this.colors.primary)
         .text(`Chamado #${ticket.ticketId} — ${ticket.title}`);
 
       document
+        .font('Helvetica')
         .fontSize(8.5)
         .fillColor(this.colors.muted)
         .text(
-          `Cliente: ${ticket.clientName}   |   Módulo: ${ticket.moduleName}   |   ` +
-            `Status: ${ticket.status}   |   Técnico: ${ticket.assignedTechnician}   |   ` +
-            `Aberto em: ${ticket.createdLabel}`,
+          `Cliente: ${ticket.clientName}   |   Módulo: ${ticket.moduleName}   |   Status: ${ticket.status}`,
+        )
+        .text(
+          `Técnico responsável: ${ticket.assignedTechnician}   |   Aberto em: ${ticket.createdLabel}`,
         );
 
       document.moveDown(0.3);
 
       const columns = [
-        { header: 'Início', width: 95 },
-        { header: 'Fim', width: 95 },
-        { header: 'Técnico', width: 110 },
-        { header: 'Atividade', width: 145 },
-        { header: 'Horas', width: 45, align: 'right' as const },
-      ];
+        { header: 'Início', width: 120 },
+        { header: 'Fim', width: 120 },
+        { header: 'Técnico', width: 216 },
+        { header: 'Horas', width: 67, align: 'right' as const },
+      ] satisfies TableColumn[];
 
       this.drawTableHeader(document, columns);
 
       let zebra = false;
       for (const activity of ticket.activities) {
-        this.ensureSpace(document, 30);
-        this.drawTableRow(
+        this.drawActivityRow(
           document,
           columns,
-          [
-            activity.startedLabel,
-            activity.endedLabel,
-            activity.technicianName,
-            activity.notes,
-            activity.hours.toFixed(2).replace('.', ','),
-          ],
+          activity,
           zebra,
+          `Chamado #${ticket.ticketId} — ${ticket.title}`,
         );
         zebra = !zebra;
       }
@@ -129,14 +133,7 @@ export class ReportPdfService {
       }
     }
 
-    document.moveDown(0.8);
-    document
-      .fontSize(12)
-      .fillColor(this.colors.primary)
-      .text(
-        `Total geral do período: ${report.totalHours.toFixed(2).replace('.', ',')} h`,
-        { align: 'right' },
-      );
+    this.drawActivityReportSummary(document, report);
 
     document.end();
     return chunks;
@@ -285,10 +282,7 @@ export class ReportPdfService {
     }
   }
 
-  private drawTableHeader(
-    document: PDFKit.PDFDocument,
-    columns: { header: string; width: number; align?: 'left' | 'right' }[],
-  ): void {
+  private drawTableHeader(document: PDFKit.PDFDocument, columns: TableColumn[]): void {
     const top = document.y;
     const totalWidth = columns.reduce((total, column) => total + column.width, 0);
 
@@ -298,7 +292,7 @@ export class ReportPdfService {
       .fill();
 
     let x = document.page.margins.left;
-    document.fontSize(8.5).fillColor('#ffffff');
+    document.font('Helvetica-Bold').fontSize(8.5).fillColor('#ffffff');
     for (const column of columns) {
       document.text(column.header, x + 4, top + 5, {
         width: column.width - 8,
@@ -313,7 +307,7 @@ export class ReportPdfService {
 
   private drawTableRow(
     document: PDFKit.PDFDocument,
-    columns: { width: number; align?: 'left' | 'right' }[],
+    columns: TableColumn[],
     values: string[],
     zebra: boolean,
   ): void {
@@ -322,7 +316,7 @@ export class ReportPdfService {
 
     // Altura calculada pelo conteúdo mais alto, para não cortar texto longo.
     let rowHeight = 14;
-    document.fontSize(8);
+    document.font('Helvetica').fontSize(8);
     columns.forEach((column, index) => {
       const height = document.heightOfString(values[index] ?? '', {
         width: column.width - 8,
@@ -338,7 +332,7 @@ export class ReportPdfService {
     }
 
     let x = document.page.margins.left;
-    document.fontSize(8).fillColor(this.colors.text);
+    document.font('Helvetica').fontSize(8).fillColor(this.colors.text);
     columns.forEach((column, index) => {
       document.text(values[index] ?? '', x + 4, top + 4, {
         width: column.width - 8,
@@ -358,6 +352,177 @@ export class ReportPdfService {
     document.x = document.page.margins.left;
   }
 
+  /**
+   * Mantém os dados temporais em uma linha compacta e reserva uma segunda faixa,
+   * de largura total, para a descrição da atividade. Assim as informações
+   * continuam visualmente ligadas ao chamado sem comprimir o texto principal.
+   */
+  private drawActivityRow(
+    document: PDFKit.PDFDocument,
+    columns: TableColumn[],
+    activity: ActivityReport['tickets'][number]['activities'][number],
+    zebra: boolean,
+    ticketLabel: string,
+  ): void {
+    const totalWidth = columns.reduce((total, column) => total + column.width, 0);
+    const values = [
+      activity.startedLabel,
+      activity.endedLabel,
+      activity.technicianName,
+      activity.hours.toFixed(2).replace('.', ','),
+    ];
+
+    document.font('Helvetica').fontSize(8);
+    let detailsHeight = 22;
+    columns.forEach((column, index) => {
+      detailsHeight = Math.max(
+        detailsHeight,
+        document.heightOfString(values[index] ?? '', {
+          width: column.width - 8,
+        }) + 8,
+      );
+    });
+
+    const labelWidth = 58;
+    const notesWidth = totalWidth - labelWidth - 12;
+    const notesFontSize = this.fitSingleLineFontSize(
+      document,
+      activity.notes,
+      notesWidth,
+      8.5,
+      6.5,
+    );
+    document.font('Helvetica').fontSize(notesFontSize);
+    const notesHeight = Math.max(
+      22,
+      document.heightOfString(activity.notes, { width: notesWidth }) + 10,
+    );
+    const blockHeight = detailsHeight + notesHeight;
+
+    const bottom = document.page.height - document.page.margins.bottom;
+    if (document.y + blockHeight > bottom) {
+      document.addPage();
+      document
+        .font('Helvetica-Bold')
+        .fontSize(10)
+        .fillColor(this.colors.primary)
+        .text(`${ticketLabel} (continuação)`);
+      document.moveDown(0.3);
+      this.drawTableHeader(document, columns);
+    }
+    const top = document.y;
+
+    if (zebra) {
+      document
+        .rect(document.page.margins.left, top, totalWidth, detailsHeight)
+        .fillColor(this.colors.zebra)
+        .fill();
+    }
+
+    let x = document.page.margins.left;
+    document.font('Helvetica').fontSize(8).fillColor(this.colors.text);
+    columns.forEach((column, index) => {
+      document.text(values[index] ?? '', x + 4, top + 6, {
+        width: column.width - 8,
+        align: column.align ?? 'left',
+      });
+      x += column.width;
+    });
+
+    const activityTop = top + detailsHeight;
+    document
+      .rect(document.page.margins.left, activityTop, totalWidth, notesHeight)
+      .fillColor(this.colors.activity)
+      .fill();
+
+    document
+      .font('Helvetica-Bold')
+      .fontSize(7.5)
+      .fillColor(this.colors.secondary)
+      .text('ATIVIDADE', document.page.margins.left + 5, activityTop + 6, {
+        width: labelWidth - 8,
+        lineBreak: false,
+      });
+    document
+      .font('Helvetica')
+      .fontSize(notesFontSize)
+      .fillColor(this.colors.text)
+      .text(activity.notes, document.page.margins.left + labelWidth, activityTop + 5, {
+        width: notesWidth,
+      });
+
+    document
+      .moveTo(document.page.margins.left, top + blockHeight)
+      .lineTo(document.page.margins.left + totalWidth, top + blockHeight)
+      .lineWidth(0.4)
+      .strokeColor(this.colors.line)
+      .stroke();
+
+    document.y = top + blockHeight;
+    document.x = document.page.margins.left;
+  }
+
+  private drawActivityReportSummary(
+    document: PDFKit.PDFDocument,
+    report: ActivityReport,
+  ): void {
+    const width = 270;
+    const height = 72;
+    this.ensureSpace(document, height + 12);
+    document.moveDown(0.8);
+
+    const left = document.page.width - document.page.margins.right - width;
+    const top = document.y;
+    document
+      .roundedRect(left, top, width, height, 6)
+      .fillColor(this.colors.summary)
+      .fill();
+
+    const labelX = left + 12;
+    const valueWidth = 120;
+    const valueX = left + width - valueWidth - 12;
+    const rows = [
+      ['Horas trabalhadas', `${report.totalHours.toFixed(2).replace('.', ',')} h`],
+      ['Valor da hora', formatCurrency(report.hourlyRate)],
+      ['Valor devido', formatCurrency(report.amountDue)],
+    ];
+
+    rows.forEach(([label, value], index) => {
+      const y = top + 10 + index * 19;
+      const isTotal = index === rows.length - 1;
+      document
+        .font(isTotal ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(isTotal ? 10.5 : 9)
+        .fillColor(isTotal ? this.colors.primary : this.colors.text)
+        .text(label, labelX, y, { width: width - valueWidth - 30, lineBreak: false });
+      document.text(value, valueX, y, {
+        width: valueWidth,
+        align: 'right',
+        lineBreak: false,
+      });
+    });
+
+    document.y = top + height;
+    document.x = document.page.margins.left;
+  }
+
+  private fitSingleLineFontSize(
+    document: PDFKit.PDFDocument,
+    text: string,
+    width: number,
+    preferred: number,
+    minimum: number,
+  ): number {
+    let size = preferred;
+    document.font('Helvetica');
+    while (size > minimum) {
+      document.fontSize(size);
+      if (document.widthOfString(text) <= width) break;
+      size -= 0.25;
+    }
+    return Math.max(size, minimum);
+  }
+
   /** Quebra a página quando não há espaço para o próximo bloco. */
   private ensureSpace(document: PDFKit.PDFDocument, needed: number): void {
     const bottom = document.page.height - document.page.margins.bottom;
@@ -365,4 +530,13 @@ export class ReportPdfService {
       document.addPage();
     }
   }
+}
+
+function formatCurrency(value: string): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value));
 }

@@ -94,6 +94,7 @@ describe('Analytics e relatórios (Fase 07)', () => {
         { key: 'company_address', value: 'Rua Exemplo, 100' },
         { key: 'company_logo', value: '' },
         { key: 'monthly_hours_allowance', value: '16.00' },
+        { key: 'activity_hourly_rate', value: '125.50' },
         { key: 'hours_bank_closing_date', value: '2026-01-01' },
       ],
     });
@@ -642,6 +643,8 @@ describe('Analytics e relatórios (Fase 07)', () => {
       // 4h + 2.5h = 6.5h.
       expect(response.body.tickets[0].totalHours).toBe(6.5);
       expect(response.body.totalHours).toBe(6.5);
+      expect(response.body.hourlyRate).toBe('125.50');
+      expect(response.body.amountDue).toBe('815.75');
     });
 
     it('totaliza por técnico em ordem alfabética', async () => {
@@ -761,6 +764,7 @@ describe('Analytics e relatórios (Fase 07)', () => {
 
       expect(response.body.tickets).toEqual([]);
       expect(response.body.totalHours).toBe(0);
+      expect(response.body.amountDue).toBe('0.00');
     });
   });
 

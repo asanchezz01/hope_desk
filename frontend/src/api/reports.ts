@@ -49,6 +49,9 @@ export interface ActivityReport {
   tickets: ActivityReportTicketRow[]
   totalsByTechnician: TechnicianTotal[]
   totalHours: number
+  /** Valor da hora e total devido, ambos com 2 casas decimais. */
+  hourlyRate: string
+  amountDue: string
 }
 
 export interface ServicesReportRow {

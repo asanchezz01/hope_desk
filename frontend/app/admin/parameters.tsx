@@ -25,6 +25,7 @@ import {
 import { refreshCompanyLogo } from '../../src/hooks/useCompanyLogo'
 import AppShell from '../../src/layout/AppShell'
 import { navItemsFor } from '../../src/layout/nav-items'
+import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 type LogoVariant = 'light' | 'dark'
@@ -33,6 +34,7 @@ export default function AdminParameters() {
   const theme = useTheme()
   const toast = useToast()
   const { user, isSuperuser } = useAuth()
+  const { isMobile } = useBreakpoint()
 
   const parameters = useCompanyParameters(isSuperuser)
   const updateParameters = useUpdateCompanyParameters()
@@ -53,6 +55,7 @@ export default function AdminParameters() {
   const [companyName, setCompanyName] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [monthlyHoursAllowance, setMonthlyHoursAllowance] = useState('')
+  const [activityHourlyRate, setActivityHourlyRate] = useState('')
   const [hoursBankClosingDate, setHoursBankClosingDate] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -63,6 +66,7 @@ export default function AdminParameters() {
     setCompanyName(data.companyName)
     setCompanyAddress(data.companyAddress)
     setMonthlyHoursAllowance(data.monthlyHoursAllowance)
+    setActivityHourlyRate(data.activityHourlyRate)
     setHoursBankClosingDate(data.hoursBankClosingDate)
     // `companyLogo` é o arquivo gravado (vazio = sem logo); é ele quem diz se a
     // prévia mostra a imagem ou o "sem logo".
@@ -95,12 +99,19 @@ export default function AdminParameters() {
       return
     }
 
+    const hourlyRateCheck = validateDecimalInput(activityHourlyRate, 'o valor da hora')
+    if (!hourlyRateCheck.ok) {
+      setError(hourlyRateCheck.error)
+      return
+    }
+
     setError(null)
     try {
       await updateParameters.mutateAsync({
         companyName: companyName.trim(),
         companyAddress: companyAddress.trim(),
         monthlyHoursAllowance: monthlyHoursAllowance.trim(),
+        activityHourlyRate: activityHourlyRate.trim(),
         hoursBankClosingDate,
       })
       toast.show('Parâmetros atualizados.', 'success')
@@ -229,14 +240,28 @@ export default function AdminParameters() {
 
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Banco de horas</Text>
-        <Input
-          label="Franquia mensal de horas"
-          value={monthlyHoursAllowance}
-          onChangeText={setMonthlyHoursAllowance}
-          keyboardType="numeric"
-          hint="Aceita vírgula decimal. Não use separador de milhar."
-          disabled={updateParameters.isPending}
-        />
+        <View style={[styles.billingFields, isMobile && styles.billingFieldsMobile]}>
+          <View style={!isMobile ? styles.billingField : undefined}>
+            <Input
+              label="Franquia mensal (h)"
+              value={monthlyHoursAllowance}
+              onChangeText={setMonthlyHoursAllowance}
+              keyboardType="numeric"
+              hint="Horas incluídas por mês. Aceita vírgula decimal."
+              disabled={updateParameters.isPending}
+            />
+          </View>
+          <View style={!isMobile ? styles.billingField : undefined}>
+            <Input
+              label="Valor da hora (R$)"
+              value={activityHourlyRate}
+              onChangeText={setActivityHourlyRate}
+              keyboardType="numeric"
+              hint="Usado no total devido do relatório de atividades."
+              disabled={updateParameters.isPending}
+            />
+          </View>
+        </View>
         <DateField
           label="Data de fechamento"
           value={hoursBankClosingDate}
@@ -282,6 +307,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
   hint: { fontSize: 13, marginTop: 10 },
   logoDivider: { height: 1, marginVertical: 18 },
+  billingFields: { flexDirection: 'row', gap: 16 },
+  billingFieldsMobile: { flexDirection: 'column', gap: 0 },
+  billingField: { flex: 1, minWidth: 0 },
   error: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end' },
 })

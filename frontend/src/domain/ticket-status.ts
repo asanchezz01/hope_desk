@@ -30,3 +30,26 @@ export function statusLabel(status: string): string {
 export function statusColor(status: string): string {
   return isTicketStatus(status) ? TICKET_STATUS_META[status].color : '#6b7280'
 }
+
+// Inverso de `TICKET_STATUS_META`: rótulo -> chave.
+const STATUS_KEY_BY_LABEL: Record<string, TicketStatus> = {
+  [TICKET_STATUS_META.aberto.label]: 'aberto',
+  [TICKET_STATUS_META.em_andamento.label]: 'em_andamento',
+  [TICKET_STATUS_META.resolvido.label]: 'resolvido',
+  [TICKET_STATUS_META.fechado.label]: 'fechado',
+}
+
+/**
+ * Normaliza o `status` que chega da API para a **chave** canônica.
+ *
+ * A maioria dos endpoints devolve a chave (`aberto`, `em_andamento`...), mas o
+ * de relatórios devolve o **rótulo** já localizado (`Em andamento`). Como
+ * `statusColor`, `statusChartColor` e `StatusBadge` são indexados pela chave,
+ * normalizar aqui evita o tom de fallback (cinza) ao pintar um card por status.
+ * Devolve `null` quando o valor não é reconhecido, para o chamante escolher o
+ * tratamento neutro.
+ */
+export function statusKeyFromRaw(raw: string): TicketStatus | null {
+  if (isTicketStatus(raw)) return raw
+  return STATUS_KEY_BY_LABEL[raw] ?? null
+}

@@ -417,8 +417,9 @@ describe('Domínios administrativos (Fase 03)', () => {
           expect(response.body).toHaveProperty('companyAddress');
           expect(response.body).toHaveProperty('companyLogo');
           expect(response.body).toHaveProperty('companyLogoDark');
-          // Não expõe franquia nem data de fechamento.
+          // Não expõe dados de cobrança nem data de fechamento.
           expect(response.body.monthlyHoursAllowance).toBeUndefined();
+          expect(response.body.activityHourlyRate).toBeUndefined();
           expect(response.body.hoursBankClosingDate).toBeUndefined();
         }
       });
@@ -437,11 +438,12 @@ describe('Domínios administrativos (Fase 03)', () => {
           companyLogo: '',
           companyLogoDark: '',
           monthlyHoursAllowance: '16',
+          activityHourlyRate: '0',
           hoursBankClosingDate: '2000-01-01',
         });
       });
 
-      it('cria as 6 chaves na primeira leitura (ensure_system_parameters)', async () => {
+      it('cria as 7 chaves na primeira leitura (ensure_system_parameters)', async () => {
         await request(app.getHttpServer())
           .get(`${API}/parameters`)
           .set('Authorization', `Bearer ${superuserToken}`)
@@ -452,6 +454,7 @@ describe('Domínios administrativos (Fase 03)', () => {
           orderBy: { key: 'asc' },
         });
         expect(keys.map((k) => k.key)).toEqual([
+          'activity_hourly_rate',
           'company_address',
           'company_logo',
           'company_logo_dark',
@@ -499,6 +502,7 @@ describe('Domínios administrativos (Fase 03)', () => {
             companyLogo: 'https://example.com/logo.png',
             companyLogoDark: 'logo-dark.png',
             monthlyHoursAllowance: '20',
+            activityHourlyRate: '150,75',
             hoursBankClosingDate: '2026-01-15',
           })
           .expect(200);
@@ -510,6 +514,7 @@ describe('Domínios administrativos (Fase 03)', () => {
           companyLogoDark: 'logo-dark.png',
           // Sempre 2 casas, como f"{value:.2f}" do legado.
           monthlyHoursAllowance: '20.00',
+          activityHourlyRate: '150.75',
           hoursBankClosingDate: '2026-01-15',
         });
       });
@@ -557,6 +562,33 @@ describe('Domínios administrativos (Fase 03)', () => {
           .patch(`${API}/parameters`)
           .set('Authorization', `Bearer ${superuserToken}`)
           .send({ monthlyHoursAllowance: value })
+          .expect(400);
+      });
+
+      it.each([
+        ['150', '150.00'],
+        ['150,75', '150.75'],
+        ['0', '0.00'],
+      ])('aceita valor/hora "%s" e grava "%s"', async (input, expected) => {
+        const response = await request(app.getHttpServer())
+          .patch(`${API}/parameters`)
+          .set('Authorization', `Bearer ${superuserToken}`)
+          .send({ activityHourlyRate: input })
+          .expect(200);
+
+        expect(response.body.activityHourlyRate).toBe(expected);
+      });
+
+      it.each([
+        ['negativo', '-1'],
+        ['texto', 'abc'],
+        ['vazio', ''],
+        ['dois separadores', '1,2,3'],
+      ])('recusa valor/hora inválido: %s', async (_label, value) => {
+        await request(app.getHttpServer())
+          .patch(`${API}/parameters`)
+          .set('Authorization', `Bearer ${superuserToken}`)
+          .send({ activityHourlyRate: value })
           .expect(400);
       });
 

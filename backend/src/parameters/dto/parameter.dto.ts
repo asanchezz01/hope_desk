@@ -51,6 +51,17 @@ export class UpdateCompanyParametersDto {
   monthlyHoursAllowance?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Valor cobrado por hora no relatório de atividades. Aceita vírgula decimal.',
+    example: '150,00',
+  })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(20)
+  activityHourlyRate?: string;
+
+  @ApiPropertyOptional({
     description: 'Data de fechamento do banco de horas, em AAAA-MM-DD.',
     example: '2026-01-01',
   })
@@ -75,6 +86,12 @@ export class PublicCompanyParametersResponse {
 export class CompanyParametersResponse extends PublicCompanyParametersResponse {
   @ApiProperty({ description: 'Sempre com 2 casas, como o legado grava.' })
   monthlyHoursAllowance!: string;
+
+  @ApiProperty({
+    description:
+      'Valor cobrado por hora no relatório de atividades, sempre com 2 casas.',
+  })
+  activityHourlyRate!: string;
 
   @ApiProperty({ description: 'AAAA-MM-DD.' })
   hoursBankClosingDate!: string;

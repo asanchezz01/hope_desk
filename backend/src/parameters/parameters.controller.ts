@@ -66,7 +66,7 @@ export class ParametersController {
   @ApiOperation({
     summary: 'Atualiza os parâmetros da empresa (superuser)',
     description:
-      'A franquia mensal aceita vírgula decimal e é gravada com 2 casas. ' +
+      'A franquia mensal e o valor da hora aceitam vírgula decimal e são gravados com 2 casas. ' +
       'A data de fechamento usa AAAA-MM-DD.',
   })
   @ApiOkResponse({ type: CompanyParametersResponse })
