@@ -9,7 +9,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 LIGHT_SOURCE="$REPO_DIR/imagens/logo_hopedesk_light.png"
 DARK_SOURCE="$REPO_DIR/imagens/logo_hopedesk_dark.png"
 MARKER="/app/media/logo/.hopedesk-brand-v4-installed"
-BACKUP_ROOT="${BRANDING_BACKUP_ROOT:-/opt/hopedesk-backups/branding}"
+BACKUP_ROOT="${BRANDING_BACKUP_ROOT:-$REPO_DIR/backups/branding}"
 
 log() { echo "[branding] $*"; }
 
