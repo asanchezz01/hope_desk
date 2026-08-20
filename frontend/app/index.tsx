@@ -166,47 +166,49 @@ export default function TicketsScreen() {
   }, [items, gridColumns])
 
   const filters = (
-    <View style={[styles.filters, !isMobile && styles.filtersWide]}>
-      <View style={!isMobile ? styles.filterField : undefined}>
-        <Select
-          label="Período"
-          value={year}
-          options={yearOptions}
-          onChange={(value) => updateFilter(() => setYear(value))}
-        />
-      </View>
-
-      {!allPeriods && (
-        <View style={!isMobile ? styles.filterField : undefined}>
+    <View style={styles.filters}>
+      <View style={styles.filterRow}>
+        <View style={styles.filterField}>
           <Select
-            label="Mês"
-            value={month}
-            options={MONTHS_PT.map((item) => ({ value: item.value, label: item.label }))}
-            onChange={(value) => updateFilter(() => setMonth(value))}
+            label="Período"
+            value={year}
+            options={yearOptions}
+            onChange={(value) => updateFilter(() => setYear(value))}
           />
         </View>
-      )}
-
-      <View style={!isMobile ? styles.filterField : undefined}>
-        <Select
-          label="Situação"
-          value={status}
-          options={TICKET_STATUS_FILTERS.map((value) => ({
-            value,
-            label: TICKET_STATUS_FILTER_LABELS[value],
-          }))}
-          onChange={(value) => updateFilter(() => setStatus(value))}
-        />
+        {!allPeriods && (
+          <View style={styles.filterField}>
+            <Select
+              label="Mês"
+              value={month}
+              options={MONTHS_PT.map((item) => ({ value: item.value, label: item.label }))}
+              onChange={(value) => updateFilter(() => setMonth(value))}
+            />
+          </View>
+        )}
       </View>
 
-      <View style={!isMobile ? styles.filterField : undefined}>
-        <Input
-          label="Buscar"
-          placeholder="Número ou título"
-          value={search}
-          onChangeText={(value) => updateFilter(() => setSearch(value))}
-          autoCapitalize="none"
-        />
+      <View style={styles.filterRow}>
+        <View style={styles.filterField}>
+          <Select
+            label="Situação"
+            value={status}
+            options={TICKET_STATUS_FILTERS.map((value) => ({
+              value,
+              label: TICKET_STATUS_FILTER_LABELS[value],
+            }))}
+            onChange={(value) => updateFilter(() => setStatus(value))}
+          />
+        </View>
+        <View style={styles.filterField}>
+          <Input
+            label="Buscar"
+            placeholder="Número ou título"
+            value={search}
+            onChangeText={(value) => updateFilter(() => setSearch(value))}
+            autoCapitalize="none"
+          />
+        </View>
       </View>
     </View>
   )
@@ -446,11 +448,8 @@ const styles = StyleSheet.create({
   summaryGridTotalValue: { fontSize: 18, fontWeight: '700' },
   count: { fontSize: 14, fontWeight: '600' },
   filters: { gap: 0 },
-  filtersWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
-  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
-  // estilo é aplicado condicionalmente, como em `analytics`.
-  filterField: { flexGrow: 1, flexBasis: 200, minWidth: 0 },
+  filterRow: { flexDirection: 'row', columnGap: 12 },
+  filterField: { flex: 1, minWidth: 0 },
   separator: { height: 10 },
   gridRow: { gap: 10, alignItems: 'stretch' },
   gridItem: { flex: 1 },

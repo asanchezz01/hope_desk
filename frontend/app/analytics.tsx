@@ -132,8 +132,8 @@ export default function Analytics() {
       {/* Uma linha de filtros, acima de tudo o que ela recorta. Nunca um filtro
           dentro de um card de gráfico: os números têm de concordar entre si. */}
       <Card>
-        <View style={[styles.filters, !isMobile && styles.filtersWide]}>
-          <View style={!isMobile && styles.filterField}>
+        <View style={styles.filters}>
+          <View style={styles.filterField}>
             <Select
               label="Período"
               value={year}
@@ -142,7 +142,7 @@ export default function Analytics() {
             />
           </View>
           {year !== ALL_PERIODS && (
-            <View style={!isMobile && styles.filterField}>
+            <View style={styles.filterField}>
               <Select
                 label="Mês"
                 value={month}
@@ -667,10 +667,8 @@ const styles = StyleSheet.create({
   dashboard: { gap: 16 },
   // Recarga mantém o quadro: o painel anterior fica visível e só perde peso.
   stale: { opacity: 0.55 },
-  filters: { gap: 0 },
-  filtersWide: { flexDirection: 'row', gap: 12 },
-  // Só na linha: num contêiner em coluna, `flexBasis` é ALTURA.
-  filterField: { flexGrow: 1, flexBasis: 200, maxWidth: 280 },
+  filters: { flexDirection: 'row', columnGap: 12 },
+  filterField: { flex: 1, minWidth: 0 },
   filterFoot: { gap: 2 },
   periodLabel: { fontSize: 14, fontWeight: '600' },
   filterHint: { fontSize: 12 },
