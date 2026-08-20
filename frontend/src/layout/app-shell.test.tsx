@@ -94,6 +94,17 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Abrir menu de navegação' })).toBeTruthy()
   })
 
+  it('padroniza o título e o separa visualmente da logo', () => {
+    renderShell()
+
+    expect(screen.getByRole('header', { name: 'Indicadores' })).toHaveStyle({
+      fontSize: 18,
+      fontWeight: '700',
+      lineHeight: 24,
+    })
+    expect(screen.getByTestId('page-title-separator')).toHaveStyle({ width: 1, height: 20 })
+  })
+
   it('abre o menu com os destinos e permite sair por ele', () => {
     mockHasSideNav = false
     renderShell()

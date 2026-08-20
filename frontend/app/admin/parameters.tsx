@@ -197,7 +197,7 @@ export default function AdminParameters() {
       </Card>
 
       <Card>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Logo da empresa</Text>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Logos da empresa</Text>
         <LogoField
           label="Modo claro e relatórios"
           currentUrl={logoUrls.light}
@@ -222,8 +222,8 @@ export default function AdminParameters() {
           removeBusy={removeDarkLogo.isPending}
         />
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
-          PNG, JPEG, WebP, GIF ou SVG, até 1MB. Aparece na tela de login, no cabeçalho do aplicativo
-          e no cabeçalho do PDF. A versão clara também é usada nos relatórios.
+          O sistema alterna automaticamente entre as versões conforme o tema ativo. A logo do modo
+          claro também é usada nos relatórios. PNG, JPEG, WebP, GIF ou SVG, até 1MB.
         </Text>
       </Card>
 

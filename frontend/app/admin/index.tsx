@@ -71,7 +71,7 @@ export default function AdminHome() {
   )
 
   return (
-    <AppShell title="Administração" navItems={navItemsFor(user)}>
+    <AppShell title="Administração" navItems={navItemsFor(user)} width="wide">
       {areas.length === 0 ? (
         <Card>
           <EmptyState

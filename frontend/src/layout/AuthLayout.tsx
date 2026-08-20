@@ -16,9 +16,16 @@ interface AuthLayoutProps {
   subtitle?: string
   children: React.ReactNode
   footer?: React.ReactNode
+  showBrandName?: boolean
 }
 
-export default function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
+export default function AuthLayout({
+  title,
+  subtitle,
+  children,
+  footer,
+  showBrandName = true,
+}: AuthLayoutProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const logoUrl = useCompanyLogo()
@@ -36,7 +43,9 @@ export default function AuthLayout({ title, subtitle, children, footer }: AuthLa
         keyboardShouldPersistTaps="handled"
       >
         <CompanyLogo size={60} imageWidth={200} src={logoUrl} />
-        <Text style={[styles.brand, { color: theme.textPrimary }]}>Hope Desk</Text>
+        {showBrandName && (
+          <Text style={[styles.brand, { color: theme.textPrimary }]}>Hope Desk</Text>
+        )}
 
         <Card style={styles.card}>
           <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>

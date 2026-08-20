@@ -18,6 +18,7 @@ import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../context/AuthProvider'
 import { useCompanyLogo } from '../hooks/useCompanyLogo'
 import { useTheme } from '../theme/ThemeContext'
+import { Typography } from '../theme/tokens'
 
 import AppMenu, { AppMenuTrigger } from './AppMenu'
 import { menuItemsFor } from './nav-items'
@@ -79,6 +80,11 @@ export default function AppShell({
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.brandRow}>
           <CompanyLogo size={34} imageWidth={112} src={logoUrl} />
+          <View
+            accessible={false}
+            testID="page-title-separator"
+            style={[styles.titleSeparator, { backgroundColor: theme.muted }]}
+          />
           <Text
             accessibilityRole="header"
             numberOfLines={1}
@@ -195,8 +201,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  title: { fontSize: 18, fontWeight: '700', flexShrink: 1 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
+  titleSeparator: { width: 1, height: 20, flexShrink: 0 },
+  title: { ...Typography.screenTitle, flexShrink: 1, minWidth: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   signOut: {
     minHeight: 32,

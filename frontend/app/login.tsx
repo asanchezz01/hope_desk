@@ -51,6 +51,7 @@ export default function Login() {
       title="Entrar"
       subtitle="Acesse com o e-mail cadastrado no Hope Desk."
       footer={<ThemeToggle />}
+      showBrandName={false}
     >
       <Input
         label="E-mail"

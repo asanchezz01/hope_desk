@@ -70,7 +70,7 @@ export default function Reports() {
   }))
 
   return (
-    <AppShell title="Relatórios" navItems={navItemsFor(user)}>
+    <AppShell title="Relatórios" navItems={navItemsFor(user)} width="wide">
       <Card>
         <View accessibilityRole="tablist" style={styles.tabs}>
           <TabButton
