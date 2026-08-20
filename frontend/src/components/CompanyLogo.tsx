@@ -25,13 +25,11 @@ interface CompanyLogoProps {
  */
 export default function CompanyLogo({ src, size, variant = 'logo', style }: CompanyLogoProps) {
   const theme = useTheme()
-  const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
 
   // Trocou de src: refaz o carregamento do zero (evita exibir a image antiga
   // por um instante após a substituição/remoção da logo).
   useEffect(() => {
-    setLoaded(false)
     setFailed(false)
   }, [src])
 
@@ -69,8 +67,10 @@ export default function CompanyLogo({ src, size, variant = 'logo', style }: Comp
       {canShowImage &&
         createElement('img', {
           src,
-          alt: 'Logo da empresa',
-          onLoad: () => setLoaded(true),
+          // Vazio de propósito: quem anuncia a logo é o `accessibilityLabel` da
+          // View acima, e assim o texto alternativo não pisca sobre o monograma
+          // enquanto a imagem carrega.
+          alt: '',
           onError: () => setFailed(true),
           style: {
             position: 'absolute',
@@ -78,8 +78,6 @@ export default function CompanyLogo({ src, size, variant = 'logo', style }: Comp
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            opacity: loaded ? 1 : 0,
-            transition: 'opacity 120ms ease',
           },
         })}
     </View>

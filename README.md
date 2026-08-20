@@ -28,6 +28,25 @@ legado ensinou sobre regras de negócio não depende dessa recuperação: está
 formalizado em **`docs/LEGACY_CONTRACTS.md`**, que é a referência a consultar
 primeiro.
 
+### Redirecionamento do endereço legado
+
+O `docker-compose.yml` da raiz mantém o contrato operacional do container
+antigo (`hope_desk`, porta `5000` e rede externa `web`), mas sua imagem contém
+apenas Nginx. Toda requisição recebida retorna `302` para
+`https://hopedesk.hopecash.tech`, sem inicializar Python, Flask ou acessar o
+banco legado.
+
+Na instalação que ainda executa o container antigo:
+
+```bash
+git pull --ff-only
+docker compose up -d --build --remove-orphans
+curl -I http://127.0.0.1:5000/
+```
+
+O último comando deve retornar `HTTP/1.1 302 Moved Temporarily` e o cabeçalho
+`Location: https://hopedesk.hopecash.tech`.
+
 ## Rodar localmente
 
 ```bash

@@ -269,6 +269,24 @@ describe('Logo da empresa (parâmetros)', () => {
       expect(served.body.equals(PNG_1PX_BUFFER)).toBe(true);
     });
 
+    it('é cacheável e revalida com 304 (o cabeçalho não pisca a cada navegação)', async () => {
+      await upload({ contentType: 'image/png', dataBase64: PNG_1PX_BASE64 }).expect(
+        200,
+      );
+
+      const first = await request(app.getHttpServer()).get(`${API}/parameters/logo`);
+      expect(first.status).toBe(200);
+      expect(first.headers['cache-control']).toContain('max-age=');
+      expect(first.headers['cache-control']).not.toContain('no-store');
+      expect(first.headers.etag).toBeTruthy();
+
+      // Mesma logo: o navegador revalida e recebe 304 (sem baixar de novo).
+      const revalidated = await request(app.getHttpServer())
+        .get(`${API}/parameters/logo`)
+        .set('If-None-Match', first.headers.etag as string);
+      expect(revalidated.status).toBe(304);
+    });
+
     it('serve o SVG com content-type image/svg+xml', async () => {
       await upload({ contentType: 'image/svg+xml', dataBase64: PNG_1PX_BASE64 }).expect(
         200,

@@ -1,48 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 import { publicLogoUrl } from '../api/admin'
 
 /**
- * URL da logo da empresa, ou `null` quando não há logo (UI cai na marca "HD").
+ * URL da logo da empresa para o `<img>` do {@link CompanyLogo}.
  *
- * Faz um pedido leve ao endpoint PÚBLICO `GET /parameters/logo` — `200` se a
- * logo existe, `401/404` caso contrário — e só então devolve a URL da imagem.
+ * Devolve a URL **na hora**, sem sondar o endpoint antes: a sondagem serializava
+ * duas idas ao servidor (status + imagem) e o monograma "HD" ficava à mostra
+ * durante as duas. Quando não há logo o `GET` devolve 404 e o próprio `<img>`
+ * cai para o monograma via `onError`.
  *
- * Funciona **antes** do login: a tela de login precisa exibir a logo sem token,
- * e este endpoint é `@Public()` no backend. Não depende de `QueryClientProvider`,
- * por isso também é seguro em testes de layout isolados.
+ * A resposta é cacheável (ver `ParametersController.getLogo`), então a partir da
+ * segunda visita o navegador pinta a imagem sem rede nenhuma. Depois de trocar
+ * ou remover a logo, chame {@link refreshCompanyLogo} para furar esse cache.
  */
-export function useCompanyLogo(): string | null {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+export function useCompanyLogo(): string {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
 
-  useEffect(() => {
-    let active = true
+let currentUrl = publicLogoUrl
+const listeners = new Set<() => void>()
 
-    fetch(publicLogoUrl, { method: 'GET' })
-      .then((response) => {
-        // Só o status interessa: cancela o corpo para não baixar a imagem que o
-        // `<img>` do componente vai buscar em seguida.
-        if (response.body) {
-          const stream = response.body as { cancel?: () => Promise<void> | void }
-          if (typeof stream.cancel === 'function') {
-            void stream.cancel()
-          }
-        }
-        if (active) {
-          setLogoUrl(response.status === 200 ? publicLogoUrl : null)
-        }
-      })
-      .catch(() => {
-        // Sem conexão / endpoint indisponível: mantém a marca padrão.
-        if (active) {
-          setLogoUrl(null)
-        }
-      })
+/**
+ * Aponta todos os cabeçalhos para uma URL nova (a logo mudou), furando o cache
+ * do navegador. Devolve a URL já versionada, para quem quiser exibi-la direto.
+ */
+export function refreshCompanyLogo(): string {
+  currentUrl = `${publicLogoUrl}?v=${Date.now()}`
+  listeners.forEach((notify) => notify())
+  return currentUrl
+}
 
-    return () => {
-      active = false
-    }
-  }, [])
+function getSnapshot(): string {
+  return currentUrl
+}
 
-  return logoUrl
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 
+import { publicLogoUrl } from '../../src/api/admin'
 import { toMessage } from '../../src/api/to-message'
 import Button from '../../src/components/Button'
 import Card from '../../src/components/Card'
@@ -21,7 +22,7 @@ import {
   useUpdateCompanyParameters,
   useUploadCompanyLogo,
 } from '../../src/hooks/useAdmin'
-import { useCompanyLogo } from '../../src/hooks/useCompanyLogo'
+import { refreshCompanyLogo } from '../../src/hooks/useCompanyLogo'
 import AppShell from '../../src/layout/AppShell'
 import { navItemsFor } from '../../src/layout/nav-items'
 import { useTheme } from '../../src/theme/ThemeContext'
@@ -35,8 +36,7 @@ export default function AdminParameters() {
   const updateParameters = useUpdateCompanyParameters()
   const uploadLogo = useUploadCompanyLogo()
   const removeLogo = useRemoveCompanyLogo()
-  const publicLogoUrl = useCompanyLogo()
-  const [logoUrl, setLogoUrl] = useState<string | null>(publicLogoUrl)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [logoBusy, setLogoBusy] = useState(false)
   const [pendingRemove, setPendingRemove] = useState(false)
 
@@ -54,12 +54,10 @@ export default function AdminParameters() {
     setCompanyAddress(data.companyAddress)
     setMonthlyHoursAllowance(data.monthlyHoursAllowance)
     setHoursBankClosingDate(data.hoursBankClosingDate)
+    // `companyLogo` é o arquivo gravado (vazio = sem logo); é ele quem diz se a
+    // prévia mostra a imagem ou o "sem logo".
+    setLogoUrl(data.companyLogo ? publicLogoUrl : null)
   }, [loaded]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // A URL pública resolve de forma assíncrona; quando chegar, reflete na prévia.
-  useEffect(() => {
-    if (publicLogoUrl) setLogoUrl(publicLogoUrl)
-  }, [publicLogoUrl])
 
   if (!isSuperuser) {
     return (
@@ -107,8 +105,9 @@ export default function AdminParameters() {
         dataBase64: selected.dataBase64,
       },
       {
-        onSuccess: (result) => {
-          setLogoUrl(result.companyLogo)
+        onSuccess: () => {
+          // Fura o cache do navegador: a URL é a mesma, o conteúdo não.
+          setLogoUrl(refreshCompanyLogo())
           toast.show('Logo da empresa atualizada.', 'success')
         },
         onError: (caught) => toast.show(toMessage(caught), 'error'),
@@ -122,6 +121,7 @@ export default function AdminParameters() {
     removeLogo.mutate(undefined, {
       onSuccess: () => {
         setLogoUrl(null)
+        refreshCompanyLogo() // cabeçalhos voltam ao monograma sem esperar o cache expirar
         toast.show('Logo da empresa removida.', 'success')
       },
       onError: (caught) => toast.show(toMessage(caught), 'error'),

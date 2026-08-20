@@ -91,9 +91,15 @@ export class ParametersController {
       return;
     }
     response.setHeader('Content-Type', logo.contentType);
-    response.setHeader('Content-Length', logo.size);
-    response.setHeader('Cache-Control', 'no-store');
-    response.end(logo.buffer);
+    // A logo quase nunca muda, mas aparece em todo cabeçalho: sem cache o
+    // navegador rebaixava a imagem a cada navegação e o monograma "HD" piscava.
+    // `stale-while-revalidate` pinta a cópia em cache na hora e revalida atrás.
+    response.setHeader(
+      'Cache-Control',
+      'public, max-age=300, stale-while-revalidate=86400',
+    );
+    // `send` (e não `end`) gera o ETag e responde 304 nas revalidações.
+    response.send(logo.buffer);
   }
 
   @Post('logo')
