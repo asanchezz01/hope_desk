@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.85 },
-  title: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
+  title: { fontSize: 12.8, fontWeight: '700', flexShrink: 1 },
   description: { fontSize: 13, lineHeight: 18 },
   badge: { fontSize: 11, marginTop: 4 },
 })

@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, alignItems: 'center', gap: 12, paddingHorizontal: 24 },
   brand: { fontSize: 26, fontWeight: '800' },
   card: { width: '100%', maxWidth: 420, marginTop: 8 },
-  title: { fontSize: 19, fontWeight: '700' },
+  title: { fontSize: 15.2, fontWeight: '700' },
   subtitle: { marginTop: 6, lineHeight: 20 },
   body: { marginTop: 16 },
   footer: { width: '100%', maxWidth: 420, alignItems: 'center', gap: 8 },

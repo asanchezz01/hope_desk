@@ -96,7 +96,7 @@ export const Radius = {
 // Font scales
 export const Typography = {
   screenTitle: {
-    fontSize: 18,
+    fontSize: 14.4,
     fontWeight: '700' as const,
     lineHeight: 24,
   },

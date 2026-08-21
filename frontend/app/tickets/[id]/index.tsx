@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   created: { fontSize: 12 },
-  title: { fontSize: 20, fontWeight: '700', marginTop: 10 },
+  title: { fontSize: 16, fontWeight: '700', marginTop: 10 },
   description: { marginTop: 8, lineHeight: 21 },
   // `flexBasis` cuida da quebra sem consultar breakpoint: cabendo dois fatos
   // lado a lado eles ficam lado a lado; no celular, um por linha.
