@@ -98,7 +98,7 @@ describe('AppShell', () => {
     renderShell()
 
     expect(screen.getByRole('header', { name: 'Indicadores' })).toHaveStyle({
-      fontSize: 18,
+      fontSize: 14.4,
       fontWeight: '700',
       lineHeight: 24,
     })
