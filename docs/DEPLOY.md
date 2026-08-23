@@ -91,7 +91,7 @@ curl -fsSL -o r.tar.gz https://github.com/actions/runner/releases/download/v2.33
 tar xzf r.tar.gz && rm r.tar.gz && chown -R gha:gha .
 
 # token de registro: Settings → Actions → Runners → New self-hosted runner
-sudo -u gha ./config.sh --url https://github.com/asanchezz01/hope_desk \
+sudo -u gha ./config.sh --url https://github.com/asanchezz01/HopeDesk \
   --token <TOKEN> --name srv1901419 --labels hopedesk-vps \
   --work _work --unattended --replace
 
@@ -102,8 +102,8 @@ chown -R gha:gha /opt/hopedesk    # o deploy roda como `gha`
 O rótulo `hopedesk-vps` é o que o workflow endereça em `runs-on`. Diagnóstico:
 
 ```bash
-systemctl status actions.runner.asanchezz01-hope_desk.srv1901419
-journalctl -u actions.runner.asanchezz01-hope_desk.srv1901419 -n 50
+systemctl status actions.runner.asanchezz01-HopeDesk.srv1901419
+journalctl -u actions.runner.asanchezz01-HopeDesk.srv1901419 -n 50
 ```
 
 ---
