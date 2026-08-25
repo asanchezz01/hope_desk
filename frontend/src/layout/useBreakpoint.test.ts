@@ -1,4 +1,4 @@
-import { BREAKPOINTS, breakpointFor, gridColumnsFor, wideMaxWidthFor } from './useBreakpoint'
+import { BREAKPOINTS, breakpointFor, gridColumnsFor } from './useBreakpoint'
 
 describe('breakpointFor', () => {
   it('classifica as larguras típicas de cada família de aparelho', () => {
@@ -39,11 +39,3 @@ describe('gridColumnsFor', () => {
   })
 })
 
-describe('wideMaxWidthFor', () => {
-  it('cresce por faixa, sem passar de um teto', () => {
-    expect(wideMaxWidthFor(360)).toBe(840)
-    expect(wideMaxWidthFor(900)).toBe(840)
-    expect(wideMaxWidthFor(1024)).toBe(1360)
-    expect(wideMaxWidthFor(1920)).toBe(1680)
-  })
-})

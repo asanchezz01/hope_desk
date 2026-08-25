@@ -1,14 +1,40 @@
+import type { FontAwesome6 } from '@expo/vector-icons'
+import type { ComponentProps } from 'react'
+
 import type { ApiUser } from '../api/client'
 
-import type { NavItem } from './AppShell'
+export interface NavItem {
+  href: string
+  label: string
+  /** Nome do glyph no FontAwesome6 (estilo solid). */
+  icon: ComponentProps<typeof FontAwesome6>['name']
+  /** Ocultar quando o perfil não puder usar. Não é autorização — a API decide. */
+  visible?: boolean
+}
+
+export interface MenuSection {
+  /** `null` nos atalhos do dia a dia, que abrem o menu sem cabeçalho. */
+  title: string | null
+  items: NavItem[]
+}
 
 /**
- * Itens de navegação por perfil.
+ * Navegação da retaguarda, agrupada por assunto.
  *
- * `visible` só evita mostrar caminho que resultaria em 403 — não é
- * autorização. A API recusa por conta própria.
+ * ## Por que é uma lista só, e agrupada
  *
- * Conferido nos controllers, porque a intuição erra aqui:
+ * Antes havia DUAS navegações: uma coluna lateral com quatro atalhos e um menu
+ * sanduíche com a lista inteira, e o sanduíche aparecia até no desktop, ao lado
+ * da coluna. Eram dois modelos para o mesmo problema, e nenhum dos dois
+ * completo. O padrão da retaguarda NewHope (HopeSell) tem uma navegação só: a
+ * coluna carrega TODOS os destinos, agrupados em seções de três a cinco itens —
+ * ler uma seção curta é mais rápido que varrer uma lista corrida — e no celular
+ * essa mesma coluna vira gaveta pelo botão sanduíche.
+ *
+ * ## `visible` não é autorização
+ *
+ * Só evita mostrar caminho que resultaria em 403. A API recusa por conta
+ * própria. Conferido nos controllers, porque a intuição erra aqui:
  *
  *   /analytics → SEM `@Roles`. Cliente acessa; o service aplica
  *                `scopedTicketWhere`, que filtra por `clientId`. Ele vê os
@@ -19,75 +45,73 @@ import type { NavItem } from './AppShell'
  *   /admin     → módulos, parâmetros e pagamentos exigem `@RequiresSuperuser()`.
  *                Gestão de usuários é a exceção: `@Roles('technician')`.
  */
-export function navItemsFor(user: ApiUser | null): NavItem[] {
+export function menuSectionsFor(user: ApiUser | null): MenuSection[] {
   const isTechnician = user?.role === 'technician'
   const isSuperuser = user?.isSuperuser ?? false
 
-  return [
-    { href: '/analytics', label: 'Painel', icon: 'gauge' },
-    { href: '/', label: 'Chamados', icon: 'ticket' },
-    { href: '/reports', label: 'Relatórios', icon: 'file-lines' },
+  const sections: MenuSection[] = [
     {
-      href: '/admin',
-      label: 'Administração',
-      icon: 'screwdriver-wrench',
-      visible: isTechnician || isSuperuser,
+      title: null,
+      items: [
+        { href: '/analytics', label: 'Painel de Indicadores', icon: 'gauge' },
+        { href: '/', label: 'Chamados', icon: 'ticket' },
+        { href: '/reports', label: 'Relatórios', icon: 'file-lines' },
+      ],
+    },
+    {
+      title: 'Administração',
+      items: [
+        // A visão geral descreve o que cada área faz — quem administra de vez
+        // em quando chega por aqui. Sem este item ela ficaria órfã: a rota
+        // existe e nenhum caminho leva até ela.
+        {
+          href: '/admin',
+          label: 'Administração',
+          icon: 'screwdriver-wrench',
+          visible: isTechnician || isSuperuser,
+        },
+        {
+          href: '/admin/parameters',
+          label: 'Parâmetros da empresa',
+          icon: 'building',
+          visible: isSuperuser,
+        },
+        {
+          href: '/admin/modules',
+          label: 'Módulos do sistema',
+          icon: 'puzzle-piece',
+          visible: isSuperuser,
+        },
+        {
+          href: '/admin/payments',
+          label: 'Pagamentos',
+          icon: 'credit-card',
+          visible: isSuperuser,
+        },
+        {
+          href: '/admin/users',
+          label: 'Usuários',
+          icon: 'users',
+          visible: isTechnician || isSuperuser,
+        },
+      ],
+    },
+    {
+      title: 'Conta',
+      items: [{ href: '/change-password', label: 'Trocar senha', icon: 'key' }],
     },
   ]
+
+  // Uma seção que perdeu todos os itens levaria junto o cabeçalho — "Administração"
+  // sozinho, sem nada embaixo, para quem não administra nada.
+  return sections
+    .map((section) => ({ ...section, items: section.items.filter((i) => i.visible !== false) }))
+    .filter((section) => section.items.length > 0)
 }
 
-export interface MenuItem extends NavItem {
-  /** Ação destrutiva ou de saída: destacada e sempre no fim. */
-  danger?: boolean
-}
+export type MenuItem = NavItem
 
-/**
- * Itens do menu completo — o equivalente do `top-actions-menu` do legado.
- *
- * ## Por que existe, além da navegação lateral
- *
- * A lateral só aparece a partir de 768px (`useBreakpoint`). **No celular não
- * havia navegação nenhuma**: quem entrava pelo telefone caía na primeira tela
- * e não tinha como sair dela — nem para o painel, nem para trocar a senha, nem
- * para as telas administrativas. O legado nunca teve esse buraco: o menu
- * sanduíche estava em toda largura, com a lista inteira dentro.
- *
- * A ordem e os rótulos seguem o legado, inclusive as três telas
- * administrativas em separado — no legado elas eram links diretos, e escondê-las
- * atrás de um índice acrescenta um passo que ninguém pediu.
- */
+/** Lista corrida dos destinos visíveis, na ordem em que aparecem na coluna. */
 export function menuItemsFor(user: ApiUser | null): MenuItem[] {
-  const isTechnician = user?.role === 'technician'
-  const isSuperuser = user?.isSuperuser ?? false
-
-  return [
-    { href: '/analytics', label: 'Painel de Indicadores', icon: 'gauge' },
-    { href: '/', label: 'Chamados', icon: 'ticket' },
-    { href: '/reports', label: 'Relatórios', icon: 'file-lines' },
-    {
-      href: '/admin/parameters',
-      label: 'Parâmetros da Empresa',
-      icon: 'building',
-      visible: isSuperuser,
-    },
-    {
-      href: '/admin/modules',
-      label: 'Módulos do Sistema',
-      icon: 'puzzle-piece',
-      visible: isSuperuser,
-    },
-    {
-      href: '/admin/payments',
-      label: 'Cadastro de Pagamentos',
-      icon: 'credit-card',
-      visible: isSuperuser,
-    },
-    {
-      href: '/admin/users',
-      label: 'Gerenciar Usuários',
-      icon: 'users',
-      visible: isTechnician || isSuperuser,
-    },
-    { href: '/change-password', label: 'Alterar Senha', icon: 'key' },
-  ]
+  return menuSectionsFor(user).flatMap((section) => section.items)
 }

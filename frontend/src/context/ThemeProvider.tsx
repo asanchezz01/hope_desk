@@ -1,3 +1,3 @@
-// Reexporta o ThemeProvider do tema (Fase 08).
+// Reexporta o ThemeProvider do tema.
 export { ThemeProvider, useThemeMode } from '../theme/ThemeContext'
-export type { ThemeColors, ThemeMode, Palette } from '../theme/ThemeContext'
+export type { ThemeColors, ThemeMode } from '../theme/ThemeContext'

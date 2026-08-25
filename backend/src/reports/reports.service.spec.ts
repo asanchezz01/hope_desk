@@ -41,6 +41,7 @@ describe('ReportsService', () => {
         company_name: 'Hope Tecnologia',
         company_address: 'Rua Exemplo, 100',
         company_logo: '',
+        report_logo: 'logo-report.png',
         activity_hourly_rate: '125,50',
       }),
       resolveLogoPath: jest.fn().mockReturnValue(null),
@@ -55,5 +56,7 @@ describe('ReportsService', () => {
     expect(report.totalHours).toBe(2.5);
     expect(report.hourlyRate).toBe('125.50');
     expect(report.amountDue).toBe('313.75');
+    expect(report.company.companyLogo).toBe('');
+    expect(parameters.resolveLogoPath).toHaveBeenCalledWith('logo-report.png');
   });
 });

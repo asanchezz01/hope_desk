@@ -10,6 +10,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { TICKET_STATUSES, TicketStatus } from '../../common/domain/legacy-enums';
+import { LAST_DAYS_CHOICES } from '../../common/domain/periods';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -160,6 +161,18 @@ export class ListTicketsQueryDto {
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   allPeriods?: boolean;
+
+  @ApiPropertyOptional({
+    enum: LAST_DAYS_CHOICES,
+    description:
+      'Janela móvel de N dias corridos terminando hoje. Tem precedência ' +
+      'sobre ano, mês e allPeriods.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(LAST_DAYS_CHOICES as unknown as number[])
+  lastDays?: number;
 
   @ApiPropertyOptional({ description: 'Busca por ID exato ou por título.' })
   @IsOptional()

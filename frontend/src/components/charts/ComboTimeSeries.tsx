@@ -108,7 +108,7 @@ export default function ComboTimeSeries({
   )
 
   if (countPoints.length === 0) {
-    return <EmptyState title="Nada a exibir" description="Sem histórico no período." />
+    return <EmptyState bare title="Nada a exibir" description="Sem histórico no período." />
   }
 
   // A altura declarada JÁ INCLUI a faixa dos rótulos do eixo x. Dimensionar só

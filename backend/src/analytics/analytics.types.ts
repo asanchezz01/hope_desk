@@ -8,7 +8,16 @@
  */
 
 /** Granularidade do eixo do gráfico. */
-export type BucketMode = 'day' | 'month';
+/**
+ * Granularidade do eixo do tempo.
+ *
+ *   'day'    dia do mês (1..31) — só serve DENTRO de um mês, que é o caso da
+ *            visão mensal; a chave repetiria entre meses diferentes;
+ *   'date'   data completa (aaaa-mm-dd) — para a janela móvel, que atravessa
+ *            a virada do mês;
+ *   'month'  aaaa-mm.
+ */
+export type BucketMode = 'day' | 'date' | 'month';
 
 export interface AnalyticsBucket {
   /** Dia do mês (`day`) ou `AAAA-MM` (`month`). */
@@ -90,12 +99,16 @@ export interface AnalyticsBacklog {
   oldestTicketId: number | null;
 }
 
-/** Cores do legado, para o frontend não reinventar a paleta. */
+/**
+ * Cores de status, no padrão visual da retaguarda NewHope — o frontend não
+ * reinventa a paleta, e o espelho dela mora em
+ * `frontend/src/domain/ticket-status.ts`. Mudou aqui, mude lá.
+ */
 export const ANALYTICS_STATUS_META: Record<string, { label: string; color: string }> = {
-  aberto: { label: 'Em aberto', color: '#d92120' },
-  em_andamento: { label: 'Em andamento', color: '#ffcc00' },
-  resolvido: { label: 'Concluído', color: '#1f9d55' },
-  fechado: { label: 'Fechado', color: '#234783' },
+  aberto: { label: 'Em aberto', color: '#b03a3a' }, // red-600
+  em_andamento: { label: 'Em andamento', color: '#a2600b' }, // amber-600
+  resolvido: { label: 'Concluído', color: '#0d7f57' }, // green-700
+  fechado: { label: 'Fechado', color: '#1f5fe0' }, // blue-600
 };
 
 export const MONTHS_PT: { value: number; label: string }[] = [

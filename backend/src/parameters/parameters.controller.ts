@@ -19,14 +19,18 @@ import {
 import { Public } from '../common/decorators/public.decorator';
 import { RequiresSuperuser } from '../common/decorators/superuser.decorator';
 import {
+  BrandingResponse,
   CompanyParametersResponse,
   PublicCompanyParametersResponse,
   RemoveCompanyLogoResponse,
   RemoveCompanyLogoDarkResponse,
+  RemoveReportLogoResponse,
   UpdateCompanyParametersDto,
   UploadCompanyLogoResponse,
   UploadCompanyLogoDarkResponse,
+  UploadReportLogoResponse,
   UploadLogoDto,
+  VisualIdentityResponse,
 } from './dto/parameter.dto';
 import { ParametersService } from './parameters.service';
 
@@ -51,6 +55,27 @@ export class ParametersController {
   @ApiOkResponse({ type: PublicCompanyParametersResponse })
   findPublic(): Promise<PublicCompanyParametersResponse> {
     return this.parametersService.findPublic();
+  }
+
+  /**
+   * `@Public()` pela mesma razão da imagem da logo: as telas de autenticação
+   * mostram a marca ANTES de haver token. Devolve só o texto ao lado da logo —
+   * nome e endereço continuam exigindo sessão.
+   */
+  @Get('branding')
+  @Public()
+  @ApiOperation({ summary: 'Texto ao lado da logo (público, sem token)' })
+  @ApiOkResponse({ type: BrandingResponse })
+  findBranding(): Promise<BrandingResponse> {
+    return this.parametersService.findBranding();
+  }
+
+  @Get('visual-identity')
+  @Public()
+  @ApiOperation({ summary: 'Cores da identidade visual (público, sem token)' })
+  @ApiOkResponse({ type: VisualIdentityResponse })
+  findVisualIdentity(): Promise<VisualIdentityResponse> {
+    return this.parametersService.findVisualIdentity();
   }
 
   @Get()
@@ -124,6 +149,27 @@ export class ParametersController {
     response.send(logo.buffer);
   }
 
+  /** A prévia é pública pelo mesmo motivo das outras logos: a tag img não envia bearer token. */
+  @Get('logo/report')
+  @Public()
+  @ApiOperation({ summary: 'Imagem exclusiva dos relatórios PDF (público, sem token)' })
+  @ApiProduces('image/*')
+  async getReportLogo(@Res() response: Response): Promise<void> {
+    const logo = await this.parametersService.getLogoFile('report');
+    if (!logo) {
+      response
+        .status(404)
+        .json({ statusCode: 404, message: 'Logo dos relatórios não configurada.' });
+      return;
+    }
+    response.setHeader('Content-Type', logo.contentType);
+    response.setHeader(
+      'Cache-Control',
+      'public, max-age=300, stale-while-revalidate=86400',
+    );
+    response.send(logo.buffer);
+  }
+
   @Post('logo')
   // `@Post` devolve 201 por padrão; o contrato (e o `@ApiOkResponse` abaixo)
   // declara 200, alinhado ao resto deste controlador.
@@ -153,6 +199,21 @@ export class ParametersController {
     ) as Promise<UploadCompanyLogoDarkResponse>;
   }
 
+  @Post('logo/report')
+  @HttpCode(200)
+  @RequiresSuperuser()
+  @ApiOperation({
+    summary: 'Envia a logo exclusiva dos relatórios PDF (base64, superuser)',
+    description: 'Aceita PNG, JPEG, WebP, GIF ou SVG de até 1MB em base64.',
+  })
+  @ApiOkResponse({ type: UploadReportLogoResponse })
+  uploadReportLogo(@Body() dto: UploadLogoDto): Promise<UploadReportLogoResponse> {
+    return this.parametersService.uploadLogo(
+      dto,
+      'report',
+    ) as Promise<UploadReportLogoResponse>;
+  }
+
   @Delete('logo')
   @RequiresSuperuser()
   @ApiOperation({
@@ -172,5 +233,15 @@ export class ParametersController {
     return this.parametersService.deleteLogo(
       'dark',
     ) as Promise<RemoveCompanyLogoDarkResponse>;
+  }
+
+  @Delete('logo/report')
+  @RequiresSuperuser()
+  @ApiOperation({ summary: 'Remove a logo exclusiva dos relatórios PDF (superuser)' })
+  @ApiOkResponse({ type: RemoveReportLogoResponse })
+  removeReportLogo(): Promise<RemoveReportLogoResponse> {
+    return this.parametersService.deleteLogo(
+      'report',
+    ) as Promise<RemoveReportLogoResponse>;
   }
 }

@@ -18,14 +18,13 @@ import { validateDecimalInput } from '../../src/domain/decimal-input'
 import { formatIsoDate, todayIsoDate } from '../../src/domain/format'
 import { useCreatePayment, useDeletePayment, usePayments } from '../../src/hooks/useAdmin'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 export default function AdminPayments() {
   const theme = useTheme()
   const toast = useToast()
-  const { user, isSuperuser } = useAuth()
+  const { isSuperuser } = useAuth()
   const { isMobile } = useBreakpoint()
 
   const [from, setFrom] = useState('')
@@ -44,7 +43,7 @@ export default function AdminPayments() {
 
   if (!isSuperuser) {
     return (
-      <AppShell title="Pagamentos" navItems={navItemsFor(user)}>
+      <AppShell title="Pagamentos">
         <Card>
           <EmptyState
             title="Sem permissão"
@@ -105,7 +104,7 @@ export default function AdminPayments() {
   const payments: Payment[] = list.data?.items ?? []
 
   return (
-    <AppShell title="Pagamentos" navItems={navItemsFor(user)}>
+    <AppShell title="Pagamentos">
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Registrar pagamento</Text>
         <View style={[styles.fields, !isMobile && styles.fieldsWide]}>

@@ -33,20 +33,6 @@ export function gridColumnsFor(width: number): number {
   return 1
 }
 
-/**
- * Teto para as telas que dispõem o conteúdo em GRADE — a listagem de chamados e
- * o painel. Só elas: travar em 1120 num monitor de 1920 desperdiça um terço da
- * largura QUANDO há colunas para preencher.
- *
- * Uma lista de LINHAS não entra aqui. Esticada a 1680 ela vira nome à esquerda,
- * botão à direita e 1400px de nada no meio — pior de ler, não melhor.
- */
-export function wideMaxWidthFor(width: number): number {
-  if (width >= 1600) return 1680
-  if (width >= BREAKPOINTS.desktop) return 1360
-  return 840
-}
-
 export interface BreakpointInfo {
   width: number
   breakpoint: Breakpoint
@@ -55,10 +41,6 @@ export interface BreakpointInfo {
   isDesktop: boolean
   /** Navegação lateral fixa cabe a partir do tablet. */
   hasSideNav: boolean
-  /** Largura máxima de leitura confortável para o conteúdo central. */
-  contentMaxWidth: number
-  /** Teto das telas em grade (listagem de chamados, painel). */
-  wideMaxWidth: number
   /**
    * Teto para conteúdo em COLUNA ÚNICA — formulários, sobretudo.
    *
@@ -82,8 +64,6 @@ export function useBreakpoint(): BreakpointInfo {
     isTablet: breakpoint === 'tablet',
     isDesktop: breakpoint === 'desktop',
     hasSideNav: breakpoint !== 'mobile',
-    contentMaxWidth: breakpoint === 'desktop' ? 1120 : 840,
-    wideMaxWidth: wideMaxWidthFor(width),
     formMaxWidth: 760,
     gridColumns: gridColumnsFor(width),
   }

@@ -25,10 +25,10 @@ interface StatusBreakdownProps {
  * - Barra empilhada, não pizza. São 4 segmentos e a leitura pretendida é
  *   "quanto de cada um no total"; pizza só ganharia se as fatias fossem bem
  *   distintas, e comparar valores próximos em ângulo é pior que em comprimento.
- * - **Rótulo e contagem sempre visíveis.** Não é enfeite: `#ffcc00` tem 1,47:1
- *   contra a superfície clara e `#234783` 1,91:1 contra a escura — abaixo de
- *   3:1. O validador de paleta trata esse aviso como obrigação de alívio por
- *   rótulo, então nenhuma informação aqui depende só da cor.
+ * - **Rótulo e contagem sempre visíveis.** Não é enfeite: quatro cores de
+ *   ESTADO nunca formam uma paleta categórica uniforme, e vermelho contra verde
+ *   é justamente o par que some para quem tem deficiência de visão de cor. O
+ *   rótulo é o segundo canal, então nada aqui depende só da cor.
  * - Separação entre segmentos por VÃO da cor da superfície, não por borda.
  */
 export default function StatusBreakdown({ slices }: StatusBreakdownProps) {
@@ -38,7 +38,7 @@ export default function StatusBreakdown({ slices }: StatusBreakdownProps) {
   const total = slices.reduce((sum, slice) => sum + slice.count, 0)
 
   if (total === 0) {
-    return <EmptyState title="Nada a exibir" description="Nenhum chamado no período." />
+    return <EmptyState bare title="Nada a exibir" description="Nenhum chamado no período." />
   }
 
   const present = slices.filter((slice) => slice.count > 0)

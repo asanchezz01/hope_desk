@@ -2,6 +2,7 @@ import { useEffect, useState, createElement } from 'react'
 import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
 import { useTheme } from '../theme/ThemeContext'
+import { Radius } from '../theme/tokens'
 
 interface CompanyLogoProps {
   /** URL da logo (ex.: o endpoint público). Vazio/`null` → marca padrão "HD". */
@@ -53,8 +54,10 @@ export default function CompanyLogo({
         {
           width: canShowImage ? imageWidth : size,
           height: size,
-          borderRadius: canShowImage ? 0 : size / 2,
-          backgroundColor: canShowImage ? 'transparent' : theme.palette.primary,
+          // Ladrilho de canto arredondado, e não disco: é a forma da marca no
+          // padrão da retaguarda NewHope.
+          borderRadius: canShowImage ? 0 : Radius.xl,
+          backgroundColor: canShowImage ? 'transparent' : theme.primary,
         },
         style,
       ]}
@@ -65,7 +68,7 @@ export default function CompanyLogo({
           style={[
             styles.initials,
             {
-              color: theme.palette.accent,
+              color: theme.onAccentText,
               fontSize: Math.max(11, Math.round(size * 0.4)),
               letterSpacing: Math.max(0.5, size * 0.02),
             },

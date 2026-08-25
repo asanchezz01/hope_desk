@@ -7,8 +7,8 @@ import Card from '../../src/components/Card'
 import EmptyState from '../../src/components/EmptyState'
 import { useAuth } from '../../src/context/AuthProvider'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useTheme } from '../../src/theme/ThemeContext'
+import { Radius } from '../../src/theme/tokens'
 
 interface AdminArea {
   href: string
@@ -64,14 +64,17 @@ const AREAS: AdminArea[] = [
 export default function AdminHome() {
   const theme = useTheme()
   const router = useRouter()
-  const { user, isSuperuser, isTechnician } = useAuth()
+  const { isSuperuser, isTechnician } = useAuth()
 
   const areas = AREAS.filter((area) =>
     area.superuserOnly ? isSuperuser : isTechnician || isSuperuser
   )
 
   return (
-    <AppShell title="Administração" navItems={navItemsFor(user)} width="wide">
+    /* `full` como as quatro telas que este índice abre: com o teto de `wide` o
+       conteúdo parava antes e ficava centralizado, então a borda esquerda saltava
+       de lugar ao navegar daqui para Usuários ou Módulos. */
+    <AppShell title="Administração">
       {areas.length === 0 ? (
         <Card>
           <EmptyState
@@ -134,15 +137,17 @@ const styles = StyleSheet.create({
     flexBasis: 260,
     minWidth: 0,
     gap: 6,
-    padding: 16,
+    // Mesma geometria do componente `Card`, que é o cartão do resto do sistema:
+    // estes aqui são feitos à mão por causa da aresta colorida no topo.
+    padding: 20,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: Radius.xl,
   },
   areaHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBadge: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },

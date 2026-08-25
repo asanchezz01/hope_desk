@@ -5,6 +5,7 @@ import { statusLabel } from '../common/domain/legacy-enums';
 import {
   addMonths,
   instantToWallClockStorage,
+  lastDaysBounds,
   monthPeriodBounds,
   storageToWallClock,
   wallClockToStorage,
@@ -41,6 +42,12 @@ const TICKET_INCLUDE = {
 interface ResolvedPeriod {
   selectedYear: number | null;
   selectedMonth: number | null;
+  /**
+   * Todo o histórico, sem recorte de data. Separado de `selectedYear === null`
+   * porque a janela móvel também não tem ano selecionado e, ao contrário de
+   * "todo o período", PRECISA recortar (ver `loadPaidHoursInPeriod`).
+   */
+  allPeriods: boolean;
   /** Fronteiras em espaço de PAREDE, como `month_period_bounds` do legado. */
   periodStart: Date;
   periodEnd: Date;
@@ -271,6 +278,22 @@ export class AnalyticsService {
     let selectedYear: number | null;
     let selectedMonth: number | null;
 
+    // A janela móvel vence os demais: quem escolhe "últimos 30 dias" não está
+    // escolhendo mês nenhum, e o seletor manda os dois juntos.
+    if (query.lastDays) {
+      const [periodStart, periodEnd] = lastDaysBounds(now, query.lastDays);
+      return {
+        selectedYear: null,
+        selectedMonth: null,
+        allPeriods: false,
+        periodStart,
+        periodEnd,
+        bucketMode: 'date',
+        buckets: dailyBuckets(periodStart, query.lastDays),
+        periodLabel: `Últimos ${query.lastDays} dias — ${dayMonthYear(periodStart)} a ${dayMonthYear(periodEnd)}`,
+      };
+    }
+
     if (query.allPeriods) {
       selectedYear = null;
       selectedMonth = null;
@@ -292,6 +315,7 @@ export class AnalyticsService {
       return {
         selectedYear,
         selectedMonth,
+        allPeriods: false,
         periodStart,
         periodEnd,
         bucketMode: 'day',
@@ -349,6 +373,7 @@ export class AnalyticsService {
     return {
       selectedYear,
       selectedMonth: null,
+      allPeriods: selectedYear === null,
       periodStart,
       periodEnd,
       bucketMode: 'month',
@@ -511,7 +536,7 @@ export class AnalyticsService {
   private async loadPaidHoursInPeriod(period: ResolvedPeriod): Promise<number> {
     const where: Prisma.PaymentRecordWhereInput = {};
 
-    if (period.selectedYear !== null) {
+    if (!period.allPeriods) {
       where.paidAt = {
         gte: toDateOnly(period.periodStart),
         lt: toDateOnly(period.periodEnd),
@@ -558,9 +583,29 @@ function monthKeyOf(stored: Date): string {
 
 function bucketOf(stored: Date, mode: BucketMode): string {
   const parts = storageToWallClock(stored);
-  return mode === 'day'
-    ? String(parts.day)
-    : `${parts.year}-${String(parts.month).padStart(2, '0')}`;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  if (mode === 'day') return String(parts.day);
+  if (mode === 'date') return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+  return `${parts.year}-${pad(parts.month)}`;
+}
+
+/** Um bucket por dia a partir de `start`, chave aaaa-mm-dd e rótulo dd/mm. */
+function dailyBuckets(start: Date, days: number): AnalyticsBucket[] {
+  return Array.from({ length: days }, (_unused, offset) => {
+    const parts = storageToWallClock(new Date(start.getTime() + offset * MS_PER_DAY));
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return {
+      key: `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`,
+      label: `${pad(parts.day)}/${pad(parts.month)}`,
+    };
+  });
+}
+
+/** dd/mm/aaaa de um valor armazenado. */
+function dayMonthYear(stored: Date): string {
+  const parts = storageToWallClock(stored);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(parts.day)}/${pad(parts.month)}/${parts.year}`;
 }
 
 /** dd/mm/aaaa HH:MM, como `strftime("%d/%m/%Y %H:%M")` do legado. */

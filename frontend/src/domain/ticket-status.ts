@@ -1,7 +1,12 @@
 // Espelho do domínio de status do backend (`legacy-enums.ts` e
-// `ANALYTICS_STATUS_META`). As cores são as canônicas do legado e são as mesmas
-// que a API devolve em `statusMeta` para os gráficos — mantê-las aqui evita que
-// a lista de chamados e o gráfico de status discordem sobre a cor de "aberto".
+// `ANALYTICS_STATUS_META`). As cores são as mesmas que a API devolve em
+// `statusMeta` para os gráficos — mantê-las aqui evita que a lista de chamados
+// e o gráfico de status discordem sobre a cor de "aberto". Mudou aqui, mude lá.
+//
+// Os quatro degraus vêm das escalas SEMÂNTICAS do preset compartilhado da
+// retaguarda NewHope (`theme/tokens.ts`): vermelho para o que urge, âmbar para
+// o que está em curso, verde para o que fechou bem, azul para o que só
+// encerrou. O significado é o mesmo do legado; o degrau é o do padrão.
 //
 // `statusLabel` reproduz `normalize_status` do legado, inclusive a tolerância a
 // status desconhecido: Title Case do valor cru, sem erro.
@@ -11,10 +16,10 @@ export const TICKET_STATUSES = ['aberto', 'em_andamento', 'resolvido', 'fechado'
 export type TicketStatus = (typeof TICKET_STATUSES)[number]
 
 export const TICKET_STATUS_META: Record<TicketStatus, { label: string; color: string }> = {
-  aberto: { label: 'Em aberto', color: '#d92120' },
-  em_andamento: { label: 'Em andamento', color: '#ffcc00' },
-  resolvido: { label: 'Concluído', color: '#1f9d55' },
-  fechado: { label: 'Fechado', color: '#234783' },
+  aberto: { label: 'Em aberto', color: '#b03a3a' }, // red-600
+  em_andamento: { label: 'Em andamento', color: '#a2600b' }, // amber-600
+  resolvido: { label: 'Concluído', color: '#0d7f57' }, // green-700
+  fechado: { label: 'Fechado', color: '#1f5fe0' }, // blue-600
 }
 
 export function isTicketStatus(value: unknown): value is TicketStatus {
@@ -28,7 +33,7 @@ export function statusLabel(status: string): string {
 
 /** Cor canônica do status, ou um cinza neutro para valores desconhecidos. */
 export function statusColor(status: string): string {
-  return isTicketStatus(status) ? TICKET_STATUS_META[status].color : '#6b7280'
+  return isTicketStatus(status) ? TICKET_STATUS_META[status].color : '#576d84'
 }
 
 // Inverso de `TICKET_STATUS_META`: rótulo -> chave.

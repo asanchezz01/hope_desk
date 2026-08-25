@@ -11,10 +11,12 @@ import { AuditService } from '../audit/audit.service';
 import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  BrandingResponse,
   CompanyParametersResponse,
   PublicCompanyParametersResponse,
   UpdateCompanyParametersDto,
   UploadLogoDto,
+  VisualIdentityResponse,
 } from './dto/parameter.dto';
 
 const LOGO_MAX_BYTES = 1024 * 1024; // 1 MB
@@ -44,12 +46,23 @@ export interface LogoFile {
   size: number;
 }
 
-export type LogoVariant = 'light' | 'dark';
+export type LogoVariant = 'light' | 'dark' | 'report';
 
 const LOGO_VARIANTS = {
   light: { key: 'company_logo', stem: 'logo' },
   dark: { key: 'company_logo_dark', stem: 'logo-dark' },
+  report: { key: 'report_logo', stem: 'logo-report' },
 } as const satisfies Record<LogoVariant, { key: SystemParameterKey; stem: string }>;
+
+type UploadLogoResponse =
+  | { companyLogo: string; size: number; contentType: string }
+  | { companyLogoDark: string; size: number; contentType: string }
+  | { reportLogo: string; size: number; contentType: string };
+
+type LogoResponseKey = 'companyLogo' | 'companyLogoDark' | 'reportLogo';
+
+type RemoveLogoResponse =
+  { companyLogo: string } | { companyLogoDark: string } | { reportLogo: string };
 
 async function rmIfExists(target: string): Promise<void> {
   try {
@@ -69,6 +82,36 @@ async function rmIfExists(target: string): Promise<void> {
  *   - `monthly_hours_allowance` aceita vírgula e é gravado com 2 casas.
  *   - `activity_hourly_rate` segue a mesma normalização decimal.
  */
+/**
+ * Chaves em que uma string vazia GRAVADA é uma escolha, e não "não configurado".
+ *
+ * Para todas as outras, vazio cai no default: nome e endereço da empresa saem
+ * no cabeçalho de todo relatório e não podem sumir porque alguém limpou o
+ * campo. O título do cabeçalho é o contrário — apagá-lo é como se pede "só a
+ * logo, sem texto ao lado".
+ */
+const BLANK_IS_A_CHOICE = new Set<SystemParameterKey>(['header_title']);
+
+/**
+ * Valor efetivo de uma chave, a partir do que está (ou não) gravado.
+ *
+ * Puro e exportado porque é aqui que mora a decisão sutil: chave AUSENTE é
+ * sempre o default, mas chave PRESENTE com valor vazio depende de
+ * `BLANK_IS_A_CHOICE`. Errar isso reverte em silêncio a escolha de quem
+ * limpou o campo — o tipo de bug que só aparece quando alguém reclama que
+ * "o nome voltou sozinho".
+ */
+export function resolveParameterValue(
+  key: SystemParameterKey,
+  stored: string | undefined,
+): string {
+  if (stored === undefined) return SYSTEM_PARAMETER_DEFAULTS[key];
+  const value = stored.trim();
+  return value !== '' || BLANK_IS_A_CHOICE.has(key)
+    ? value
+    : SYSTEM_PARAMETER_DEFAULTS[key];
+}
+
 @Injectable()
 export class ParametersService {
   constructor(
@@ -92,7 +135,13 @@ export class ParametersService {
     return value ? value : SYSTEM_PARAMETER_DEFAULTS[key];
   }
 
-  /** Lê várias chaves numa consulta só. */
+  /**
+   * Lê várias chaves numa consulta só.
+   *
+   * Vazio GRAVADO cai no default — nome e endereço não podem sumir do cabeçalho
+   * do relatório porque alguém apagou o campo. As exceções estão em
+   * `BLANK_IS_A_CHOICE`, onde vazio é uma decisão e não um descuido.
+   */
   async getMany(
     keys: SystemParameterKey[],
   ): Promise<Record<SystemParameterKey, string>> {
@@ -103,10 +152,33 @@ export class ParametersService {
 
     const result = {} as Record<SystemParameterKey, string>;
     for (const key of keys) {
-      const value = byKey.get(key)?.trim();
-      result[key] = value ? value : SYSTEM_PARAMETER_DEFAULTS[key];
+      result[key] = resolveParameterValue(key, byKey.get(key));
     }
     return result;
+  }
+
+  /** Marca exibida antes do login. Só o texto — ver `BrandingResponse`. */
+  async findBranding(): Promise<BrandingResponse> {
+    const values = await this.getMany(['header_title']);
+    return { headerTitle: values.header_title };
+  }
+
+  /** Cores aplicadas pela interface inclusive antes de existir sessão. */
+  async findVisualIdentity(): Promise<VisualIdentityResponse> {
+    const values = await this.getMany([
+      'visual_primary_color',
+      'visual_secondary_color',
+      'visual_accent_color',
+      'visual_info_color',
+      'visual_danger_color',
+    ]);
+    return {
+      primaryColor: values.visual_primary_color,
+      secondaryColor: values.visual_secondary_color,
+      accentColor: values.visual_accent_color,
+      infoColor: values.visual_info_color,
+      dangerColor: values.visual_danger_color,
+    };
   }
 
   /** `ensure_system_parameters()`: cria o que falta, sem sobrescrever. */
@@ -136,12 +208,14 @@ export class ParametersService {
       'company_address',
       'company_logo',
       'company_logo_dark',
+      'header_title',
     ]);
     return {
       companyName: values.company_name,
       companyAddress: values.company_address,
       companyLogo: values.company_logo,
       companyLogoDark: values.company_logo_dark,
+      headerTitle: values.header_title,
     };
   }
 
@@ -152,6 +226,13 @@ export class ParametersService {
       'company_address',
       'company_logo',
       'company_logo_dark',
+      'report_logo',
+      'visual_primary_color',
+      'visual_secondary_color',
+      'visual_accent_color',
+      'visual_info_color',
+      'visual_danger_color',
+      'header_title',
       'monthly_hours_allowance',
       'activity_hourly_rate',
       'hours_bank_closing_date',
@@ -162,6 +243,13 @@ export class ParametersService {
       companyAddress: values.company_address,
       companyLogo: values.company_logo,
       companyLogoDark: values.company_logo_dark,
+      reportLogo: values.report_logo,
+      primaryColor: values.visual_primary_color,
+      secondaryColor: values.visual_secondary_color,
+      accentColor: values.visual_accent_color,
+      infoColor: values.visual_info_color,
+      dangerColor: values.visual_danger_color,
+      headerTitle: values.header_title,
       monthlyHoursAllowance: values.monthly_hours_allowance,
       activityHourlyRate: values.activity_hourly_rate,
       hoursBankClosingDate: values.hours_bank_closing_date,
@@ -184,6 +272,19 @@ export class ParametersService {
     if (dto.companyLogoDark !== undefined) {
       updates.set('company_logo_dark', dto.companyLogoDark);
     }
+    if (dto.headerTitle !== undefined) {
+      // Pode ser vazio: significa "só a logo, sem texto ao lado".
+      updates.set('header_title', dto.headerTitle);
+    }
+    if (dto.primaryColor !== undefined)
+      updates.set('visual_primary_color', dto.primaryColor);
+    if (dto.secondaryColor !== undefined)
+      updates.set('visual_secondary_color', dto.secondaryColor);
+    if (dto.accentColor !== undefined)
+      updates.set('visual_accent_color', dto.accentColor);
+    if (dto.infoColor !== undefined) updates.set('visual_info_color', dto.infoColor);
+    if (dto.dangerColor !== undefined)
+      updates.set('visual_danger_color', dto.dangerColor);
     if (dto.monthlyHoursAllowance !== undefined) {
       updates.set(
         'monthly_hours_allowance',
@@ -251,10 +352,7 @@ export class ParametersService {
   async uploadLogo(
     dto: UploadLogoDto,
     variant: LogoVariant = 'light',
-  ): Promise<
-    | { companyLogo: string; size: number; contentType: string }
-    | { companyLogoDark: string; size: number; contentType: string }
-  > {
+  ): Promise<UploadLogoResponse> {
     const extension = LOGO_EXTENSIONS[dto.contentType];
     if (!extension) {
       throw new BadRequestException(
@@ -288,18 +386,14 @@ export class ParametersService {
     });
 
     return {
-      [variant === 'light' ? 'companyLogo' : 'companyLogoDark']: fileName,
+      [this.logoResponseKey(variant)]: fileName,
       size: buffer.length,
       contentType: dto.contentType,
-    } as
-      | { companyLogo: string; size: number; contentType: string }
-      | { companyLogoDark: string; size: number; contentType: string };
+    } as UploadLogoResponse;
   }
 
-  /** Remove a logo gravada e limpa o parâmetro (volta a marca padrão "HD"). */
-  async deleteLogo(
-    variant: LogoVariant = 'light',
-  ): Promise<{ companyLogo: string } | { companyLogoDark: string }> {
+  /** Remove a logo gravada e limpa o parâmetro correspondente. */
+  async deleteLogo(variant: LogoVariant = 'light'): Promise<RemoveLogoResponse> {
     const config = LOGO_VARIANTS[variant];
     await this.clearLogoFiles(variant);
     await this.upsertLogo(variant, '');
@@ -308,7 +402,7 @@ export class ParametersService {
       entityType: 'parameters',
       metadata: { keys: config.key, removed: true },
     });
-    return variant === 'light' ? { companyLogo: '' } : { companyLogoDark: '' };
+    return { [this.logoResponseKey(variant)]: '' } as RemoveLogoResponse;
   }
 
   /** Lê a logo gravada para streaming (ou `null` quando não há). */
@@ -337,6 +431,12 @@ export class ParametersService {
       create: { key, value },
       update: { value },
     });
+  }
+
+  private logoResponseKey(variant: LogoVariant): LogoResponseKey {
+    if (variant === 'dark') return 'companyLogoDark';
+    if (variant === 'report') return 'reportLogo';
+    return 'companyLogo';
   }
 
   private async clearLogoFiles(variant: LogoVariant): Promise<void> {

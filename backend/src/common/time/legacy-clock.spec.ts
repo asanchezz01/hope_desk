@@ -5,6 +5,7 @@ import {
   formatWallClockIso,
   formatWallClockPtBr,
   instantToWallClockParts,
+  lastDaysBounds,
   monthPeriodBounds,
   parseWallClockInput,
   startOfNextMonth,
@@ -191,6 +192,32 @@ describe('legacy-clock', () => {
       expect(formatWallClockPtBr(parseWallClockInput('2026-03-10T08:05'))).toBe(
         '10/03/2026 08:05',
       );
+    });
+  });
+  describe('lastDaysBounds', () => {
+    it('ancora na meia-noite e conta hoje como um dos N dias', () => {
+      const agora = parseWallClockInput('2026-08-25T14:37');
+      const [inicio, fim] = lastDaysBounds(agora, 30);
+
+      // 30 dias corridos terminando hoje => 25/08 menos 29 dias = 27/07.
+      expect(formatWallClockIso(inicio)).toBe('2026-07-27T00:00:00');
+      // O fim e o instante atual: atividade em curso entra ate agora.
+      expect(fim).toBe(agora);
+    });
+
+    it('produz exatamente N caixinhas de dia inteiro', () => {
+      const agora = parseWallClockInput('2026-08-25T14:37');
+      for (const dias of [30, 60, 90, 120]) {
+        const [inicio] = lastDaysBounds(agora, dias);
+        const inicioDeHoje = parseWallClockInput('2026-08-25T00:00');
+        const caixinhas = (inicioDeHoje.getTime() - inicio.getTime()) / 86_400_000 + 1;
+        expect(caixinhas).toBe(dias);
+      }
+    });
+
+    it('atravessa a virada do ano sem tropecar', () => {
+      const [inicio] = lastDaysBounds(parseWallClockInput('2026-01-10T09:00'), 30);
+      expect(formatWallClockIso(inicio)).toBe('2025-12-12T00:00:00');
     });
   });
 });

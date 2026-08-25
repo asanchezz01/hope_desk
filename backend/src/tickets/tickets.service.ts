@@ -10,7 +10,11 @@ import { TICKET_DELETE_WINDOW_MESSAGE } from '../common/domain/deletion-window';
 import { statusLabel, TicketStatus } from '../common/domain/legacy-enums';
 import { TICKET_CREATED, TICKET_STATUS_CHANGED } from '../common/events/domain-events';
 import { DomainEventsService } from '../common/events/domain-events.service';
-import { instantToWallClockParts } from '../common/time/legacy-clock';
+import {
+  instantToWallClockParts,
+  instantToWallClockStorage,
+  lastDaysBounds,
+} from '../common/time/legacy-clock';
 import { AuditService } from '../audit/audit.service';
 import { AUDIT_ACTIONS } from '../audit/audit.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -185,10 +189,25 @@ export class TicketsService {
   /**
    * `resolve_period` do legado: default é o mês corrente em hora local, e mês
    * fora de 1..12 cai para o mês corrente em vez de dar erro.
+   *
+   * A janela móvel (`lastDays`) não tem ano nem mês — `appliedFilters` devolve
+   * `null` nos dois, como já fazia em "todo o período". Ela vence os demais
+   * parâmetros: quem pede "últimos 30 dias" não está pedindo mês nenhum, e o
+   * seletor da tela manda ano e mês na mesma requisição.
    */
   private resolvePeriod(
     query: ListTicketsQueryDto,
-  ): { year: number; month: number; start: Date; end: Date } | null {
+  ): { year: number | null; month: number | null; start: Date; end: Date } | null {
+    if (query.lastDays) {
+      // Mesmo espaço de `monthPeriodBounds` (parte de parede gravada como UTC),
+      // que é o que os limites de mês abaixo já usam.
+      const [start, end] = lastDaysBounds(
+        instantToWallClockStorage(new Date()),
+        query.lastDays,
+      );
+      return { year: null, month: null, start, end };
+    }
+
     if (query.allPeriods) return null;
 
     const nowParts = instantToWallClockParts(new Date());

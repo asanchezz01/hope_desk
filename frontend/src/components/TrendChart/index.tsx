@@ -30,7 +30,7 @@ export default function TrendChart({ points, measure }: TrendChartProps) {
   const theme = useTheme()
 
   if (points.length === 0) {
-    return <EmptyState title="Nada a exibir" description="Sem histórico no período." />
+    return <EmptyState bare title="Nada a exibir" description="Sem histórico no período." />
   }
 
   const max = Math.max(...points.map((point) => point.value), 1)

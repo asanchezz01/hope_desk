@@ -71,9 +71,10 @@ describe('StatusBreakdown', () => {
   ]
 
   it('mostra rótulo e contagem de cada situação — nunca só a cor', () => {
-    // Não é preferência: #ffcc00 tem 1,47:1 contra a superfície clara, abaixo
-    // do mínimo de 3:1. O aviso do validador de paleta obriga alívio por
-    // rótulo visível, e este teste impede que ele seja removido.
+    // Não é preferência: quatro cores de estado nunca formam uma paleta
+    // categórica uniforme, e quem não distingue vermelho de verde precisa de um
+    // segundo canal. O rótulo visível é esse canal, e este teste impede que ele
+    // seja removido.
     renderWithTheme(<StatusBreakdown slices={slices} />)
 
     for (const slice of slices) {

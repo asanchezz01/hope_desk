@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+
+import { LAST_DAYS_CHOICES } from '../../common/domain/periods';
 
 /**
  * Três visões, como no legado:
@@ -36,6 +38,18 @@ export class AnalyticsQueryDto {
   @IsOptional()
   @Type(() => Boolean)
   allPeriods?: boolean;
+
+  @ApiPropertyOptional({
+    enum: LAST_DAYS_CHOICES,
+    description:
+      'Janela móvel de N dias corridos terminando hoje. Tem precedência ' +
+      'sobre ano, mês e allPeriods.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(LAST_DAYS_CHOICES as unknown as number[])
+  lastDays?: number;
 }
 
 class BucketDto {

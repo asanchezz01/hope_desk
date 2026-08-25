@@ -20,23 +20,20 @@ import StatTile from '../src/components/StatTile'
 import TicketCard from '../src/components/TicketCard'
 import { useToast } from '../src/components/Toast'
 import { useAuth } from '../src/context/AuthProvider'
-import { formatHours } from '../src/domain/format'
+import { formatHours, formatInteger } from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
+import { ALL_PERIODS, LAST_DAYS_OPTIONS, lastDaysOf, periodParams } from '../src/domain/periods'
 import { useDebouncedValue } from '../src/hooks/useDebouncedValue'
 import { useMonthlyHoursSummary } from '../src/hooks/useMonthlyHoursSummary'
 import { useReportPdf } from '../src/hooks/useReports'
 import { useAvailableYears, useTicketList } from '../src/hooks/useTickets'
 import AppShell from '../src/layout/AppShell'
-import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
 import { readTicketFilters, saveTicketFilters } from '../src/storage/preferences'
 import { useIsDark, useTheme } from '../src/theme/ThemeContext'
 import { statusChartColor } from '../src/theme/chart-palette'
 
 const PAGE_SIZE = 25
-
-/** Valor sentinela do seletor de período: o `Select` não aceita `null`. */
-const ALL_PERIODS = 0
 
 /** Célula da grade: um chamado, ou um vão para completar a última linha. */
 type TicketRow = Ticket | { spacerKey: string }
@@ -45,8 +42,8 @@ export default function TicketsScreen() {
   const theme = useTheme()
   const isDark = useIsDark()
   const router = useRouter()
-  const { user, isClient } = useAuth()
-  const { isMobile, wideMaxWidth, gridColumns } = useBreakpoint()
+  const { isClient } = useAuth()
+  const { isMobile, isDesktop, gridColumns } = useBreakpoint()
 
   // Calculado uma vez: `new Date()` no corpo do componente muda de identidade a
   // cada render e invalidaria os `useMemo` que dependem dele.
@@ -93,19 +90,22 @@ export default function TicketsScreen() {
   }, [filtersLoaded, year, month, status])
 
   const debouncedSearch = useDebouncedValue(search)
-  const allPeriods = year === ALL_PERIODS
+  const lastDays = lastDaysOf(year)
+  /** Só com mês concreto os números mensais e o PDF do mês fazem sentido. */
+  const concreteMonth = year > 0
 
   const params = useMemo(
     () => ({
-      // Com `allPeriods`, ano e mês precisam sair da requisição — enviá-los
-      // faria a API aplicar o filtro de período de qualquer forma.
-      ...(allPeriods ? { allPeriods: true } : { year, month }),
+      // `periodParams` monta ano/mês, `allPeriods` ou `lastDays` — nunca dois
+      // ao mesmo tempo. Mandar ano junto com `allPeriods` faria a API filtrar
+      // por período assim mesmo.
+      ...periodParams(year, month),
       status,
       search: debouncedSearch.trim() || undefined,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [allPeriods, year, month, status, debouncedSearch, page]
+    [year, month, status, debouncedSearch, page]
   )
 
   const list = useTicketList(params)
@@ -113,8 +113,8 @@ export default function TicketsScreen() {
   const toast = useToast()
 
   // Só com mês concreto os dois números "fora do grid" fazem sentido; com
-  // "Todo o período" a consulta fica desligada.
-  const monthlySummary = useMonthlyHoursSummary({ year, month }, !allPeriods)
+  // "Todo o período" ou uma janela móvel a consulta fica desligada.
+  const monthlySummary = useMonthlyHoursSummary({ year, month }, concreteMonth)
   const pdf = useReportPdf()
 
   async function downloadPdf() {
@@ -143,6 +143,9 @@ export default function TicketsScreen() {
     // `.map` sobre uma união — o parâmetro cairia em `any` implícito.
     const available: number[] = years.data ?? [currentYear]
     return [
+      // As janelas móveis vêm primeiro: é o recorte que a operação usa todo
+      // dia, e o ano concreto é a exceção (fechamento, auditoria).
+      ...LAST_DAYS_OPTIONS,
       ...available.map((value) => ({ value, label: String(value) })),
       { value: ALL_PERIODS, label: 'Todo o período' },
     ]
@@ -165,10 +168,20 @@ export default function TicketsScreen() {
     ]
   }, [items, gridColumns])
 
+  // Os filtros vêm ANTES dos totais, e num cartão — a mesma forma do painel de
+  // indicadores: uma linha de filtros acima de tudo o que ela recorta. Os
+  // números embaixo são consequência do recorte, e lê-los antes de saber qual é
+  // o recorte é ler no escuro.
   const filters = (
-    <View style={styles.filters}>
-      <View style={styles.filterRow}>
-        <View style={styles.filterField}>
+    <Card>
+      <View style={styles.filters}>
+        <View
+          style={[
+            styles.filterField,
+            !concreteMonth && !isDesktop && styles.periodFieldFull,
+            isDesktop && styles.periodFieldDesktop,
+          ]}
+        >
           <Select
             label="Período"
             value={year}
@@ -176,8 +189,8 @@ export default function TicketsScreen() {
             onChange={(value) => updateFilter(() => setYear(value))}
           />
         </View>
-        {!allPeriods && (
-          <View style={styles.filterField}>
+        {concreteMonth && (
+          <View style={[styles.filterField, isDesktop && styles.monthFieldDesktop]}>
             <Select
               label="Mês"
               value={month}
@@ -186,10 +199,7 @@ export default function TicketsScreen() {
             />
           </View>
         )}
-      </View>
-
-      <View style={styles.filterRow}>
-        <View style={styles.filterField}>
+        <View style={[styles.filterField, isDesktop && styles.statusFieldDesktop]}>
           <Select
             label="Situação"
             value={status}
@@ -200,7 +210,7 @@ export default function TicketsScreen() {
             onChange={(value) => updateFilter(() => setStatus(value))}
           />
         </View>
-        <View style={styles.filterField}>
+        <View style={[styles.filterField, isDesktop && styles.searchFieldDesktop]}>
           <Input
             label="Buscar"
             placeholder="Número ou título"
@@ -210,7 +220,33 @@ export default function TicketsScreen() {
           />
         </View>
       </View>
-    </View>
+
+      {/* As ações da tela fecham o cartão de filtros, separadas por um filete.
+          Ficavam soltas acima dele, disputando a primeira linha da tela com a
+          contagem — e o que abre a tela tem de ser o recorte, não o botão. */}
+      <View style={[styles.filterActions, { borderTopColor: theme.border }]}>
+        <View style={isMobile ? styles.actionCell : undefined}>
+          {/* O demonstrativo é mensal; sem mês concreto não há o que exportar. */}
+          <Button
+            title="Exportar PDF"
+            variant="secondary"
+            icon="file-pdf"
+            disabled={!concreteMonth}
+            loading={pdf.isPending}
+            onPress={downloadPdf}
+            full={isMobile}
+          />
+        </View>
+        <View style={isMobile ? styles.actionCell : undefined}>
+          <Button
+            title="Novo chamado"
+            icon="plus"
+            onPress={() => router.push('/tickets/new')}
+            full={isMobile}
+          />
+        </View>
+      </View>
+    </Card>
   )
 
   // Cartão-resumo do dashboard do legado. Com mês concreto, os três números
@@ -227,13 +263,23 @@ export default function TicketsScreen() {
   const summaryCard = (
     <Card>
       <View style={[styles.summaryRow, !isMobile && styles.summaryRowWide]}>
-        {allPeriods ? (
+        {/* A contagem era uma linha de texto solta acima da lista. Como quadro
+            ela fica ao lado dos outros totais, na mesma tipografia — e é o
+            número que responde "achei quantos?" com os filtros de cima. */}
+        <StatTile
+          style={stacked}
+          accent={theme.info}
+          label="Chamados encontrados"
+          value={list.isLoading ? '…' : formatInteger(total)}
+          hint="Com os filtros aplicados"
+        />
+        {!concreteMonth ? (
           <StatTile
             style={stacked}
             accent={theme.chartMagnitude}
             label="Total de horas do período"
             value={summary ? formatHours(summary.periodTotalHours) : list.isLoading ? '…' : '—'}
-            hint="Todo o histórico"
+            hint={lastDays ? `Chamados criados nos últimos ${lastDays} dias` : 'Todo o histórico'}
           />
         ) : (
           <>
@@ -293,7 +339,7 @@ export default function TicketsScreen() {
   )
 
   return (
-    <AppShell title="Chamados" navItems={navItemsFor(user)} scroll={false}>
+    <AppShell title="Chamados" scroll={false}>
       <FlatList
         // Trocar `numColumns` em uma FlatList já montada é um erro em tempo de
         // execução no React Native; a `key` força a remontagem ao girar a tela
@@ -303,13 +349,10 @@ export default function TicketsScreen() {
         numColumns={gridColumns}
         columnWrapperStyle={gridColumns > 1 ? styles.gridRow : undefined}
         keyExtractor={(row) => ('spacerKey' in row ? row.spacerKey : String(row.id))}
-        contentContainerStyle={[
-          styles.listContent,
-          // `AppShell scroll={false}` entrega a região de tamanho total para a
-          // lista rolar; o recorte de largura + centralização é daqui, no
-          // container de conteúdo (uma coluna), casando com o painel de gráficos.
-          { width: '100%', maxWidth: wideMaxWidth, alignSelf: 'center' },
-        ]}
+        // `AppShell scroll={false}` entrega a região de tamanho total para a
+        // lista rolar. A largura é a da retaguarda inteira (sem teto), então
+        // aqui só sobra o recuo — que é o mesmo do cabeçalho da tela.
+        contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
           <RefreshControl
@@ -323,31 +366,8 @@ export default function TicketsScreen() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={[styles.count, { color: theme.textSecondary }]}>
-                {list.isLoading
-                  ? 'Carregando…'
-                  : `${total} ${total === 1 ? 'chamado' : 'chamados'}`}
-              </Text>
-              <View style={styles.headerActions}>
-                {/* O demonstrativo é mensal; sem mês concreto não há o que exportar. */}
-                <Button
-                  title="Exportar PDF"
-                  variant="secondary"
-                  icon="file-pdf"
-                  disabled={allPeriods}
-                  loading={pdf.isPending}
-                  onPress={downloadPdf}
-                />
-                <Button
-                  title="Novo chamado"
-                  icon="plus"
-                  onPress={() => router.push('/tickets/new')}
-                />
-              </View>
-            </View>
-            {summaryCard}
             {filters}
+            {summaryCard}
           </View>
         }
         ListEmptyComponent={
@@ -416,16 +436,22 @@ export default function TicketsScreen() {
 }
 
 const styles = StyleSheet.create({
-  listContent: { padding: 16, paddingBottom: 32 },
+  // O mesmo recuo do cabeçalho da tela (`headerOutside` do AppShell), senão a
+  // lista começa 4px à esquerda do título.
+  listContent: { padding: 20, paddingBottom: 32 },
   header: { gap: 12, marginBottom: 12 },
-  headerTop: {
+  filterActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
     flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
   },
-  headerActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  // No celular os botões dividem a linha em vez de encolherem até o rótulo
+  // quebrar; abaixo de 300px de cartão eles empilham sozinhos pelo `minWidth`.
+  actionCell: { flexGrow: 1, flexBasis: 150, minWidth: 0 },
   summaryRow: { gap: 10 },
   summaryRowWide: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   stackedTile: { flexBasis: 'auto' },
@@ -446,10 +472,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   summaryGridTotalValue: { fontSize: 18, fontWeight: '700' },
-  count: { fontSize: 14, fontWeight: '600' },
-  filters: { gap: 0 },
-  filterRow: { flexDirection: 'row', columnGap: 12 },
-  filterField: { flex: 1, minWidth: 0 },
+  // Cada campo (`Input`/`Select`) traz `marginBottom: 16` próprio. No último
+  // isso vira vão morto entre o campo e a borda do cartão; a margem negativa
+  // cancela só esse último.
+  filters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    columnGap: 12,
+    marginBottom: -16,
+  },
+  // Fora do desktop, a base de 45% mantém duas colunas com o vão de 12px.
+  // No desktop cada seletor recebe só o espaço compatível com o maior valor;
+  // a busca cresce até um comprimento confortável, sem alargar os demais.
+  filterField: { flexGrow: 1, flexBasis: '45%', minWidth: 0 },
+  periodFieldFull: { flexGrow: 0, flexBasis: '100%' },
+  periodFieldDesktop: { flexGrow: 0, flexBasis: 164 },
+  monthFieldDesktop: { flexGrow: 0, flexBasis: 120 },
+  statusFieldDesktop: { flexGrow: 0, flexBasis: 164 },
+  searchFieldDesktop: { flexGrow: 1, flexBasis: 188, minWidth: 188, maxWidth: 420 },
   separator: { height: 10 },
   gridRow: { gap: 10, alignItems: 'stretch' },
   gridItem: { flex: 1 },

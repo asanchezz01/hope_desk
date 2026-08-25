@@ -1,54 +1,31 @@
-// Menu completo do sistema — o equivalente do `top-actions-menu` do legado.
+// Gaveta de navegação do celular.
 //
-// ## O buraco que ele fecha
-//
-// A navegação lateral do `AppShell` só existe a partir de 768px. Abaixo disso
-// não havia navegação alguma: quem entrava pelo celular ficava preso na
-// primeira tela, sem caminho para o painel, para os relatórios, para as telas
-// administrativas ou para trocar a senha. O legado nunca teve esse problema —
-// o menu sanduíche aparecia em toda largura.
-//
-// Por isso o gatilho aqui é incondicional. Em telas largas ele convive com a
-// lateral (que é atalho para o que se usa o tempo todo) e guarda a lista
-// inteira, exatamente como o legado fazia com a navbar e o sanduíche.
+// Não é um menu à parte: ela renderiza a MESMA `SidebarNav` da coluna fixa do
+// desktop. Era esse o buraco de antes — a coluna tinha quatro atalhos, o menu
+// tinha a lista inteira, e as duas listas viviam em arquivos diferentes. Uma
+// árvore só significa que nenhum destino pode existir num lugar e faltar no
+// outro.
 import { FontAwesome6 } from '@expo/vector-icons'
-import { usePathname, useRouter } from 'expo-router'
 import React from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import type { ApiUser } from '../api/client'
 import { useTheme } from '../theme/ThemeContext'
+import { Radius } from '../theme/tokens'
 
-import type { MenuItem } from './nav-items'
+import SidebarNav, { SIDEBAR_WIDTH } from './SidebarNav'
 
 interface AppMenuProps {
-  items: MenuItem[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Nome de quem está logado, para o cabeçalho do painel. */
-  userName?: string
-  /** Papel legível ("Técnico"/"Cliente"), como o legado mostrava no avatar. */
-  userRole?: string
+  user: ApiUser | null
   onSignOut: () => void
 }
 
-export default function AppMenu({
-  items,
-  open,
-  onOpenChange,
-  userName,
-  userRole,
-  onSignOut,
-}: AppMenuProps) {
+export default function AppMenu({ open, onOpenChange, user, onSignOut }: AppMenuProps) {
   const theme = useTheme()
-  const router = useRouter()
-  const pathname = usePathname()
-
-  const visible = items.filter((item) => item.visible !== false)
-
-  function go(href: string) {
-    onOpenChange(false)
-    router.push(href as never)
-  }
+  const insets = useSafeAreaInsets()
 
   return (
     <Modal
@@ -67,86 +44,31 @@ export default function AppMenu({
       >
         <Pressable
           accessibilityRole="menu"
-          style={[styles.panel, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
+          style={[
+            styles.panel,
+            {
+              backgroundColor: theme.surfaceNav,
+              borderRightColor: theme.border,
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+            },
+          ]}
           // Impede que o toque dentro do painel chegue ao fundo e o feche.
           onPress={(event) => event.stopPropagation()}
         >
-          <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <View style={styles.headerText}>
-              <Text style={[styles.userName, { color: theme.textPrimary }]} numberOfLines={1}>
-                {userName ?? 'Menu'}
-              </Text>
-              {userRole && (
-                <Text style={[styles.userRole, { color: theme.textSecondary }]}>{userRole}</Text>
-              )}
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Fechar menu"
-              onPress={() => onOpenChange(false)}
-              style={[styles.close, { borderColor: theme.border }]}
-            >
-              <Text style={[styles.closeLabel, { color: theme.textSecondary }]}>Fechar</Text>
-            </Pressable>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.list}>
-            {visible.map((item) => {
-              const active = pathname === item.href
-              return (
-                <Pressable
-                  key={item.href}
-                  accessibilityRole="menuitem"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => go(item.href)}
-                  style={[styles.item, active && { backgroundColor: theme.background }]}
-                >
-                  <View
-                    style={[
-                      styles.marker,
-                      { backgroundColor: active ? theme.primary : 'transparent' },
-                    ]}
-                  />
-                  <FontAwesome6
-                    name={item.icon}
-                    size={14}
-                    color={active ? theme.textPrimary : theme.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.itemLabel,
-                      { color: active ? theme.textPrimary : theme.textSecondary },
-                      active && styles.itemLabelActive,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-
-            <Pressable
-              accessibilityRole="menuitem"
-              onPress={() => {
-                onOpenChange(false)
-                onSignOut()
-              }}
-              style={[styles.item, styles.signOut, { borderTopColor: theme.border }]}
-            >
-              <View style={styles.marker} />
-              <FontAwesome6 name="right-from-bracket" size={14} color={theme.danger} />
-              <Text style={[styles.itemLabel, styles.itemLabelActive, { color: theme.danger }]}>
-                Sair
-              </Text>
-            </Pressable>
-          </ScrollView>
+          <SidebarNav
+            user={user}
+            onSignOut={onSignOut}
+            onNavigate={() => onOpenChange(false)}
+            onClose={() => onOpenChange(false)}
+          />
         </Pressable>
       </Pressable>
     </Modal>
   )
 }
 
-/** Botão sanduíche do cabeçalho. Três barras, como no legado. */
+/** Botão sanduíche da barra de topo — só existe onde não há coluna fixa. */
 export function AppMenuTrigger({ onPress }: { onPress: () => void }) {
   const theme = useTheme()
 
@@ -155,71 +77,31 @@ export function AppMenuTrigger({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="Abrir menu de navegação"
       onPress={onPress}
-      style={[styles.trigger, { borderColor: theme.border }]}
+      style={({ pressed }) => [
+        styles.trigger,
+        pressed && { backgroundColor: theme.surfaceMuted },
+      ]}
     >
-      {[0, 1, 2].map((line) => (
-        <View key={line} style={[styles.triggerBar, { backgroundColor: theme.textPrimary }]} />
-      ))}
+      <FontAwesome6 name="bars" size={16} color={theme.textSecondary} />
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    padding: 12,
-  },
+  // `slate-900/50` do padrão: a página continua legível atrás da gaveta, o que
+  // ajuda a lembrar de onde se veio.
+  backdrop: { flex: 1, backgroundColor: 'rgba(12,25,42,0.5)', flexDirection: 'row' },
   panel: {
-    width: '100%',
-    maxWidth: 320,
-    maxHeight: '92%',
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
+    width: SIDEBAR_WIDTH,
+    maxWidth: '85%',
+    height: '100%',
+    borderRightWidth: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerText: { flexShrink: 1 },
-  userName: { fontSize: 15, fontWeight: '700' },
-  userRole: { fontSize: 12 },
-  close: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  closeLabel: { fontSize: 13, fontWeight: '600' },
-  list: { paddingVertical: 6 },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 46,
-    paddingHorizontal: 12,
-  },
-  marker: { width: 3, height: 20, borderRadius: 2 },
-  itemLabel: { fontSize: 15 },
-  itemLabelActive: { fontWeight: '700' },
-  signOut: { marginTop: 6, borderTopWidth: 1 },
   trigger: {
-    width: 38,
-    height: 34,
-    borderRadius: 9,
-    borderWidth: 1,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    borderRadius: Radius.lg,
   },
-  triggerBar: { width: 16, height: 2, borderRadius: 1 },
 })

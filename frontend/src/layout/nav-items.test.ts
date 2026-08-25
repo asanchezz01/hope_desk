@@ -1,6 +1,6 @@
 import type { ApiUser } from '../api/client'
 
-import { menuItemsFor, navItemsFor } from './nav-items'
+import { menuItemsFor, menuSectionsFor } from './nav-items'
 
 function userWith(overrides: Partial<ApiUser>): ApiUser {
   return {
@@ -27,7 +27,7 @@ describe('menuItemsFor', () => {
       'Painel de Indicadores',
       'Chamados',
       'Relatórios',
-      'Alterar Senha',
+      'Trocar senha',
     ])
   })
 
@@ -36,10 +36,10 @@ describe('menuItemsFor', () => {
     // superusuário. Mostrar as demais ao técnico ofereceria um 403.
     const items = menuItemsFor(userWith({ role: 'technician' }))
 
-    expect(visibleLabels(items)).toContain('Gerenciar Usuários')
-    expect(visibleLabels(items)).not.toContain('Parâmetros da Empresa')
-    expect(visibleLabels(items)).not.toContain('Módulos do Sistema')
-    expect(visibleLabels(items)).not.toContain('Cadastro de Pagamentos')
+    expect(visibleLabels(items)).toContain('Usuários')
+    expect(visibleLabels(items)).not.toContain('Parâmetros da empresa')
+    expect(visibleLabels(items)).not.toContain('Módulos do sistema')
+    expect(visibleLabels(items)).not.toContain('Pagamentos')
   })
 
   it('abre as três telas administrativas para o superusuário', () => {
@@ -49,11 +49,12 @@ describe('menuItemsFor', () => {
       'Painel de Indicadores',
       'Chamados',
       'Relatórios',
-      'Parâmetros da Empresa',
-      'Módulos do Sistema',
-      'Cadastro de Pagamentos',
-      'Gerenciar Usuários',
-      'Alterar Senha',
+      'Administração',
+      'Parâmetros da empresa',
+      'Módulos do sistema',
+      'Pagamentos',
+      'Usuários',
+      'Trocar senha',
     ])
   })
 
@@ -62,8 +63,8 @@ describe('menuItemsFor', () => {
     // superusuário administra o sistema.
     const items = menuItemsFor(userWith({ role: 'client', isSuperuser: true }))
 
-    expect(visibleLabels(items)).toContain('Cadastro de Pagamentos')
-    expect(visibleLabels(items)).toContain('Gerenciar Usuários')
+    expect(visibleLabels(items)).toContain('Pagamentos')
+    expect(visibleLabels(items)).toContain('Usuários')
   })
 
   it('sem sessão, não oferece caminho nenhum protegido', () => {
@@ -71,22 +72,28 @@ describe('menuItemsFor', () => {
       'Painel de Indicadores',
       'Chamados',
       'Relatórios',
-      'Alterar Senha',
+      'Trocar senha',
     ])
   })
 })
 
-describe('navItemsFor', () => {
+describe('menuSectionsFor', () => {
   it('começa pelo Painel — é para onde o login leva', () => {
-    // A lateral e o destino do login precisam concordar: se o primeiro item
-    // não fosse o painel, a tela inicial não teria marcador ativo nenhum.
-    expect(navItemsFor(userWith({})).map((item) => item.href)[0]).toBe('/analytics')
+    // A coluna e o destino do login precisam concordar: se o primeiro item não
+    // fosse o painel, a tela inicial não teria marcador ativo nenhum.
+    expect(menuItemsFor(userWith({})).map((item) => item.href)[0]).toBe('/analytics')
   })
 
-  it('esconde a Administração de quem não é técnico nem superusuário', () => {
-    expect(visibleLabels(navItemsFor(userWith({ role: 'client' })))).not.toContain('Administração')
-    expect(visibleLabels(navItemsFor(userWith({ role: 'client', isSuperuser: true })))).toContain(
-      'Administração'
-    )
+  it('agrupa por assunto, com os atalhos do dia a dia sem cabeçalho', () => {
+    const sections = menuSectionsFor(userWith({ role: 'technician', isSuperuser: true }))
+
+    expect(sections.map((section) => section.title)).toEqual([null, 'Administração', 'Conta'])
+  })
+
+  it('some com a seção inteira quando o perfil não tem nenhum item dela', () => {
+    // Senão sobraria o cabeçalho "Administração" sozinho, sem nada embaixo.
+    const sections = menuSectionsFor(userWith({ role: 'client' }))
+
+    expect(sections.map((section) => section.title)).toEqual([null, 'Conta'])
   })
 })

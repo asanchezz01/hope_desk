@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
+import { Radius, Shadows } from '../../theme/tokens'
 
 interface StatTileProps {
   label: string
@@ -53,9 +54,10 @@ export default function StatTile({
       style={[
         styles.tile,
         {
-          backgroundColor: muted ? theme.background : theme.cardBg,
+          backgroundColor: muted ? theme.surfaceMuted : theme.cardBg,
           borderColor: theme.border,
         },
+        !muted && Shadows.card,
         hero && styles.tileHero,
         style,
       ]}
@@ -92,13 +94,13 @@ const styles = StyleSheet.create({
     paddingLeft: 17,
     paddingRight: 14,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
   },
   tileHero: { flexBasis: 230 },
   accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
   label: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  value: { fontSize: 26, fontWeight: '700', lineHeight: 32 },
+  value: { fontSize: 24, fontWeight: '700', lineHeight: 30 },
   valueHero: { fontSize: 40, fontWeight: '700', lineHeight: 46, letterSpacing: -0.5 },
   hint: { fontSize: 12, lineHeight: 16 },
 })

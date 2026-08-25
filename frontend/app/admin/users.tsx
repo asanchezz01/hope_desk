@@ -15,7 +15,6 @@ import { useToast } from '../../src/components/Toast'
 import { useAuth } from '../../src/context/AuthProvider'
 import { useCreateUser, useDeleteUser, useUsers } from '../../src/hooks/useAdmin'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
@@ -102,7 +101,7 @@ export default function AdminUsers() {
   const users: ApiUser[] = list.data?.items ?? []
 
   return (
-    <AppShell title="Usuários" navItems={navItemsFor(user)}>
+    <AppShell title="Usuários">
       <Card>
         <View style={styles.headerRow}>
           <View style={styles.filterField}>

@@ -16,7 +16,6 @@ import { canCreateForOtherClient } from '../../src/domain/ticket-permissions'
 import { useActiveModules, useClients, useTechnicians } from '../../src/hooks/useCatalog'
 import { useCreateTicket } from '../../src/hooks/useTickets'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 export default function NewTicket() {
@@ -78,7 +77,7 @@ export default function NewTicket() {
 
   if (modules.isError) {
     return (
-      <AppShell title="Novo chamado" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Novo chamado" width="form">
         <ErrorState error={modules.error} onRetry={() => void modules.refetch()} />
       </AppShell>
     )
@@ -93,7 +92,7 @@ export default function NewTicket() {
   const moduleOptions = moduleList.map((item) => ({ value: item.id, label: item.name }))
 
   return (
-    <AppShell title="Novo chamado" navItems={navItemsFor(user)} width="form">
+    <AppShell title="Novo chamado" width="form">
       <Card>
         <Input
           label="Título"

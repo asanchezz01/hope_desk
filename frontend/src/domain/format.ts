@@ -90,3 +90,17 @@ export function firstDayOfMonthIso(now: Date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
 }
+
+/**
+ * Primeiro dia de uma janela de `days` dias corridos terminando HOJE, em
+ * `AAAA-MM-DD`. Hoje conta como um dos dias — "últimos 30 dias" com hoje em
+ * 25/08 começa em 27/07, e não em 26/07.
+ *
+ * A conta usa meio-dia como âncora: somar dias direto sobre a meia-noite
+ * escorrega uma hora na virada do horário de verão, e a data volta errada.
+ */
+export function isoDaysAgo(days: number, now: Date = new Date()): string {
+  const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12)
+  anchor.setDate(anchor.getDate() - (days - 1))
+  return todayIsoDate(anchor)
+}

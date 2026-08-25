@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 
-import { publicDarkLogoUrl, publicLogoUrl } from '../../src/api/admin'
+import { publicDarkLogoUrl, publicLogoUrl, publicReportLogoUrl } from '../../src/api/admin'
+import type { BrandColors } from '../../src/api/admin'
 import { toMessage } from '../../src/api/to-message'
 import Button from '../../src/components/Button'
 import Card from '../../src/components/Card'
+import ColorField from '../../src/components/ColorField'
 import ConfirmationDialog from '../../src/components/ConfirmationDialog'
 import DateField from '../../src/components/DateField'
 import EmptyState from '../../src/components/EmptyState'
@@ -15,6 +17,7 @@ import Skeleton from '../../src/components/Skeleton'
 import { useToast } from '../../src/components/Toast'
 import type { SelectedImage } from '../../src/components/image-file.types'
 import { useAuth } from '../../src/context/AuthProvider'
+import { isHexColor } from '../../src/domain/color'
 import { validateDecimalInput } from '../../src/domain/decimal-input'
 import {
   useCompanyParameters,
@@ -23,35 +26,84 @@ import {
   useUploadCompanyLogo,
 } from '../../src/hooks/useAdmin'
 import { refreshCompanyLogo } from '../../src/hooks/useCompanyLogo'
+import { useRefreshHeaderTitle } from '../../src/hooks/useHeaderTitle'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
-type LogoVariant = 'light' | 'dark'
+type LogoVariant = 'light' | 'dark' | 'report'
+
+/**
+ * Os cinco degraus da identidade visual, na ordem em que aparecem na tela.
+ *
+ * A dica de cada um diz ONDE a cor aparece, e não o que ela é: "cor principal"
+ * não ajuda ninguém a decidir, "o verde do cabeçalho do PDF" ajuda. As duas
+ * últimas não entram no relatório — o PDF não tem aviso nem erro impresso — e
+ * a dica precisa dizer isso, senão alguém troca a cor de alerta esperando ver
+ * o documento mudar.
+ */
+const CAMPOS_DE_COR: { key: keyof BrandColors; label: string; hint: string }[] = [
+  {
+    key: 'primaryColor',
+    label: 'Cor principal',
+    hint: 'Botões e destaques da tela, e o verde do cabeçalho do relatório em PDF.',
+  },
+  {
+    key: 'secondaryColor',
+    label: 'Cor secundária',
+    hint: 'O azul de apoio: subtítulo e dados do chamado no relatório em PDF.',
+  },
+  {
+    key: 'accentColor',
+    label: 'Cor de destaque',
+    hint: 'O filete âmbar sob o cabeçalho do relatório em PDF.',
+  },
+  { key: 'infoColor', label: 'Cor de informação', hint: 'Avisos neutros. Só na tela.' },
+  { key: 'dangerColor', label: 'Cor de alerta', hint: 'Erros e exclusões. Só na tela.' },
+]
+
+/** Antes de a API responder não há cor nenhuma; o campo entra vazio, não preto. */
+const CORES_VAZIAS: BrandColors = {
+  primaryColor: '',
+  secondaryColor: '',
+  accentColor: '',
+  infoColor: '',
+  dangerColor: '',
+}
+
+function cacheBustedLogoUrl(url: string) {
+  return `${url}?v=${Date.now()}`
+}
 
 export default function AdminParameters() {
   const theme = useTheme()
   const toast = useToast()
-  const { user, isSuperuser } = useAuth()
+  const { isSuperuser } = useAuth()
   const { isMobile } = useBreakpoint()
 
+  const refreshHeaderTitle = useRefreshHeaderTitle()
   const parameters = useCompanyParameters(isSuperuser)
   const updateParameters = useUpdateCompanyParameters()
   const uploadLogo = useUploadCompanyLogo('light')
   const uploadDarkLogo = useUploadCompanyLogo('dark')
+  const uploadReportLogo = useUploadCompanyLogo('report')
   const removeLogo = useRemoveCompanyLogo('light')
   const removeDarkLogo = useRemoveCompanyLogo('dark')
+  const removeReportLogo = useRemoveCompanyLogo('report')
   const [logoUrls, setLogoUrls] = useState<Record<LogoVariant, string | null>>({
     light: null,
     dark: null,
+    report: null,
   })
   const [logoBusy, setLogoBusy] = useState<Record<LogoVariant, boolean>>({
     light: false,
     dark: false,
+    report: false,
   })
   const [pendingRemove, setPendingRemove] = useState<LogoVariant | null>(null)
 
+  const [headerTitle, setHeaderTitle] = useState('')
+  const [colors, setColors] = useState<BrandColors>(CORES_VAZIAS)
   const [companyName, setCompanyName] = useState('')
   const [companyAddress, setCompanyAddress] = useState('')
   const [monthlyHoursAllowance, setMonthlyHoursAllowance] = useState('')
@@ -63,6 +115,14 @@ export default function AdminParameters() {
   useEffect(() => {
     const data = parameters.data
     if (!data) return
+    setHeaderTitle(data.headerTitle)
+    setColors({
+      primaryColor: data.primaryColor,
+      secondaryColor: data.secondaryColor,
+      accentColor: data.accentColor,
+      infoColor: data.infoColor,
+      dangerColor: data.dangerColor,
+    })
     setCompanyName(data.companyName)
     setCompanyAddress(data.companyAddress)
     setMonthlyHoursAllowance(data.monthlyHoursAllowance)
@@ -73,12 +133,13 @@ export default function AdminParameters() {
     setLogoUrls({
       light: data.companyLogo ? publicLogoUrl : null,
       dark: data.companyLogoDark ? publicDarkLogoUrl : null,
+      report: data.reportLogo ? cacheBustedLogoUrl(publicReportLogoUrl) : null,
     })
   }, [loaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isSuperuser) {
     return (
-      <AppShell title="Parâmetros" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Parâmetros">
         <Card>
           <EmptyState
             title="Sem permissão"
@@ -105,15 +166,29 @@ export default function AdminParameters() {
       return
     }
 
+    // Cor pela metade não pode chegar à API: ela responde 400 e a mensagem
+    // genérica não diria QUAL das cinco está incompleta.
+    const corInvalida = CAMPOS_DE_COR.find((campo) => !isHexColor(colors[campo.key]))
+    if (corInvalida) {
+      setError(`Informe ${corInvalida.label.toLowerCase()} no formato #RRGGBB.`)
+      return
+    }
+
     setError(null)
     try {
       await updateParameters.mutateAsync({
+        ...colors,
+        // Sem `|| algo`: vazio aqui é o pedido de "só a logo, sem texto".
+        headerTitle: headerTitle.trim(),
         companyName: companyName.trim(),
         companyAddress: companyAddress.trim(),
         monthlyHoursAllowance: monthlyHoursAllowance.trim(),
         activityHourlyRate: activityHourlyRate.trim(),
         hoursBankClosingDate,
       })
+      // O cabeçalho lê a marca por uma consulta própria; sem invalidá-la, quem
+      // acabou de trocar o título continuaria vendo o antigo ao lado da logo.
+      refreshHeaderTitle()
       toast.show('Parâmetros atualizados.', 'success')
     } catch (caught) {
       setError(toMessage(caught))
@@ -122,7 +197,8 @@ export default function AdminParameters() {
 
   function handleUpload(variant: LogoVariant, selected: SelectedImage) {
     setLogoBusy((current) => ({ ...current, [variant]: true }))
-    const mutation = variant === 'dark' ? uploadDarkLogo : uploadLogo
+    const mutation =
+      variant === 'dark' ? uploadDarkLogo : variant === 'report' ? uploadReportLogo : uploadLogo
     mutation.mutate(
       {
         fileName: selected.fileName,
@@ -132,12 +208,17 @@ export default function AdminParameters() {
       {
         onSuccess: () => {
           // Fura o cache do navegador: a URL é a mesma, o conteúdo não.
-          const nextUrl = refreshCompanyLogo(variant)
+          const nextUrl =
+            variant === 'report'
+              ? cacheBustedLogoUrl(publicReportLogoUrl)
+              : refreshCompanyLogo(variant)
           setLogoUrls((current) => ({ ...current, [variant]: nextUrl }))
           toast.show(
             variant === 'dark'
               ? 'Logo do modo escuro atualizada.'
-              : 'Logo do modo claro atualizada.',
+              : variant === 'report'
+                ? 'Logo dos relatórios PDF atualizada.'
+                : 'Logo do modo claro atualizada.',
             'success'
           )
         },
@@ -151,13 +232,18 @@ export default function AdminParameters() {
     const variant = pendingRemove
     if (!variant) return
     setPendingRemove(null)
-    const mutation = variant === 'dark' ? removeDarkLogo : removeLogo
+    const mutation =
+      variant === 'dark' ? removeDarkLogo : variant === 'report' ? removeReportLogo : removeLogo
     mutation.mutate(undefined, {
       onSuccess: () => {
         setLogoUrls((current) => ({ ...current, [variant]: null }))
-        refreshCompanyLogo(variant)
+        if (variant !== 'report') refreshCompanyLogo(variant)
         toast.show(
-          variant === 'dark' ? 'Logo do modo escuro removida.' : 'Logo do modo claro removida.',
+          variant === 'dark'
+            ? 'Logo do modo escuro removida.'
+            : variant === 'report'
+              ? 'Logo dos relatórios PDF removida.'
+              : 'Logo do modo claro removida.',
           'success'
         )
       },
@@ -167,7 +253,7 @@ export default function AdminParameters() {
 
   if (parameters.isError && !parameters.data) {
     return (
-      <AppShell title="Parâmetros" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Parâmetros">
         <Card>
           <ErrorState error={parameters.error} onRetry={() => void parameters.refetch()} />
         </Card>
@@ -177,7 +263,7 @@ export default function AdminParameters() {
 
   if (!parameters.data) {
     return (
-      <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Parâmetros da empresa">
         <Card>
           <Skeleton height={140} radius={12} />
         </Card>
@@ -186,7 +272,7 @@ export default function AdminParameters() {
   }
 
   return (
-    <AppShell title="Parâmetros da empresa" navItems={navItemsFor(user)} width="form">
+    <AppShell title="Parâmetros da empresa">
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
           Cabeçalho dos relatórios
@@ -208,9 +294,9 @@ export default function AdminParameters() {
       </Card>
 
       <Card>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Logos da empresa</Text>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Identidade visual</Text>
         <LogoField
-          label="Modo claro e relatórios"
+          label="Logo do modo claro"
           currentUrl={logoUrls.light}
           previewBackgroundColor="#ffffff"
           onUpload={
@@ -233,9 +319,59 @@ export default function AdminParameters() {
           removeBusy={removeDarkLogo.isPending}
         />
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
-          O sistema alterna automaticamente entre as versões conforme o tema ativo. A logo do modo
-          claro também é usada nos relatórios. PNG, JPEG, WebP, GIF ou SVG, até 1MB.
+          O sistema alterna automaticamente entre as versões conforme o tema ativo. PNG, JPEG,
+          WebP, GIF ou SVG, até 1MB.
         </Text>
+
+        <View style={[styles.logoDivider, { backgroundColor: theme.border }]} />
+
+        <Text style={[styles.subsectionTitle, { color: theme.textPrimary }]}>Relatórios PDF</Text>
+        <LogoField
+          label="Logo dos relatórios PDF"
+          currentUrl={logoUrls.report}
+          previewBackgroundColor="#ffffff"
+          onUpload={
+            Platform.OS === 'web' ? (selected) => handleUpload('report', selected) : undefined
+          }
+          onRemove={() => setPendingRemove('report')}
+          busy={logoBusy.report}
+          removeBusy={removeReportLogo.isPending}
+        />
+        <Text style={[styles.hint, { color: theme.textSecondary }]}>
+          Usada exclusivamente nos relatórios PDF. Ela não altera as logos exibidas na aplicação.
+        </Text>
+
+        <View style={[styles.logoDivider, { backgroundColor: theme.border }]} />
+
+        <Input
+          label="Título ao lado da logo"
+          value={headerTitle}
+          onChangeText={setHeaderTitle}
+          hint="Aparece no cabeçalho e na coluna de navegação. Deixe em branco para exibir só a logo."
+          maxLength={60}
+          disabled={updateParameters.isPending}
+        />
+      </Card>
+
+      <Card>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
+          Identidade visual
+        </Text>
+        <Text style={[styles.hint, styles.sectionHint, { color: theme.textSecondary }]}>
+          As mesmas cores valem para a interface e para o cabeçalho dos relatórios em PDF. Os
+          tons neutros do papel (texto, filete, linhas zebradas) não mudam: eles é que garantem
+          o contraste da leitura.
+        </Text>
+        {CAMPOS_DE_COR.map((campo) => (
+          <ColorField
+            key={campo.key}
+            label={campo.label}
+            hint={campo.hint}
+            value={colors[campo.key]}
+            onChange={(value) => setColors((atual) => ({ ...atual, [campo.key]: value }))}
+            disabled={updateParameters.isPending}
+          />
+        ))}
       </Card>
 
       <Card>
@@ -287,15 +423,21 @@ export default function AdminParameters() {
 
       <ConfirmationDialog
         visible={pendingRemove !== null}
-        title={`Remover a logo do modo ${pendingRemove === 'dark' ? 'escuro' : 'claro'}?`}
+        title={
+          pendingRemove === 'report'
+            ? 'Remover a logo dos relatórios PDF?'
+            : `Remover a logo do modo ${pendingRemove === 'dark' ? 'escuro' : 'claro'}?`
+        }
         description={
           pendingRemove === 'dark'
             ? 'A interface escura voltará a exibir a marca padrão.'
-            : 'A interface clara e os PDFs voltarão a exibir a marca padrão.'
+            : pendingRemove === 'report'
+              ? 'Os relatórios PDF deixarão de exibir esta logo.'
+              : 'A interface clara voltará a exibir a marca padrão.'
         }
         confirmLabel="Remover"
         destructive
-        busy={removeLogo.isPending || removeDarkLogo.isPending}
+        busy={removeLogo.isPending || removeDarkLogo.isPending || removeReportLogo.isPending}
         onCancel={() => setPendingRemove(null)}
         onConfirm={confirmRemove}
       />
@@ -304,7 +446,9 @@ export default function AdminParameters() {
 }
 
 const styles = StyleSheet.create({
+  sectionHint: { marginTop: -8, marginBottom: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
+  subsectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 12 },
   hint: { fontSize: 13, marginTop: 10 },
   logoDivider: { height: 1, marginVertical: 18 },
   billingFields: { flexDirection: 'row', gap: 16 },

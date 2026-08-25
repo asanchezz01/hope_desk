@@ -29,15 +29,14 @@ import {
 import { buildInsights } from '../src/domain/analytics-insights'
 import { formatDecimal, formatInteger } from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
+import { ALL_PERIODS, LAST_DAYS_OPTIONS, periodParams } from '../src/domain/periods'
 import { useAnalytics } from '../src/hooks/useAnalytics'
 import AppShell from '../src/layout/AppShell'
-import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
 import { useIsDark, useTheme } from '../src/theme/ThemeContext'
 import { STATUS_CHART_ORDER, statusChartColor } from '../src/theme/chart-palette'
 
-/** Sentinelas dos seletores — o `Select` não aceita `null`. */
-const ALL_PERIODS = 0
+/** Sentinela do seletor de mês — o `Select` não aceita `null`. */
 const WHOLE_YEAR = 0
 
 /** Quantas linhas da tabela vão para a tela. O resto está nos gráficos. */
@@ -83,11 +82,10 @@ export default function Analytics() {
   const [month, setMonth] = useState<number>(currentMonth)
   const [filters, setFilters] = useState<AnalyticsFilters>(NO_FILTERS)
 
-  const params = useMemo(() => {
-    if (year === ALL_PERIODS) return { allPeriods: true }
-    if (month === WHOLE_YEAR) return { year }
-    return { year, month }
-  }, [year, month])
+  // `periodParams` é a MESMA regra da lista de chamados. Duplicá-la aqui era o
+  // caminho curto para as duas telas mostrarem recortes diferentes com o mesmo
+  // filtro escrito na tela.
+  const params = useMemo(() => periodParams(year, month), [year, month])
 
   const analytics = useAnalytics(params)
   const data = analytics.data
@@ -106,6 +104,8 @@ export default function Analytics() {
   const yearOptions = useMemo(() => {
     const available: number[] = data?.availableYears ?? [currentYear]
     return [
+      // As janelas móveis vêm primeiro: é o recorte do dia a dia.
+      ...LAST_DAYS_OPTIONS,
       ...available.map((value) => ({ value, label: String(value) })),
       { value: ALL_PERIODS, label: 'Todo o período' },
     ]
@@ -121,14 +121,14 @@ export default function Analytics() {
 
   if (analytics.isError && !data) {
     return (
-      <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)} width="wide">
+      <AppShell title="Painel de Indicadores">
         <ErrorState error={analytics.error} onRetry={() => void analytics.refetch()} />
       </AppShell>
     )
   }
 
   return (
-    <AppShell title="Painel de Indicadores" navItems={navItemsFor(user)} width="wide">
+    <AppShell title="Painel de Indicadores">
       {/* Uma linha de filtros, acima de tudo o que ela recorta. Nunca um filtro
           dentro de um card de gráfico: os números têm de concordar entre si. */}
       <Card>
@@ -141,7 +141,9 @@ export default function Analytics() {
               onChange={(value) => selectPeriod({ year: value })}
             />
           </View>
-          {year !== ALL_PERIODS && (
+          {/* Mês só faz sentido dentro de um ano concreto: numa janela móvel
+              ("últimos 60 dias") ou em todo o histórico não há mês a escolher. */}
+          {year > 0 && (
             <View style={styles.filterField}>
               <Select
                 label="Mês"
@@ -488,9 +490,9 @@ function Dashboard({
 
         <ChartCard
           title={
-            data.bucketMode === 'day'
-              ? 'Ritmo do período, dia a dia'
-              : 'Ritmo do período, mês a mês'
+            data.bucketMode === 'month'
+              ? 'Ritmo do período, mês a mês'
+              : 'Ritmo do período, dia a dia'
           }
           subtitle="Duas escalas: chamados à esquerda, horas à direita"
           basis={wide ? 480 : undefined}

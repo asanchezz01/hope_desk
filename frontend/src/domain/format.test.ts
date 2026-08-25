@@ -5,6 +5,7 @@ import {
   formatInteger,
   formatIsoDate,
   formatPercent,
+  isoDaysAgo,
   maskBrDate,
   parseBrDateToIso,
   todayIsoDate,
@@ -76,5 +77,17 @@ describe('datas puras', () => {
     const now = new Date(2026, 6, 15, 23, 30)
     expect(todayIsoDate(now)).toBe('2026-07-15')
     expect(firstDayOfMonthIso(now)).toBe('2026-07-01')
+  })
+
+  it('conta hoje como um dos dias da janela móvel', () => {
+    // 30 dias terminando em 25/08 começa em 27/07, não em 26/07.
+    const now = new Date(2026, 7, 25, 14, 37)
+    expect(isoDaysAgo(30, now)).toBe('2026-07-27')
+    expect(isoDaysAgo(1, now)).toBe('2026-08-25')
+  })
+
+  it('atravessa a virada do ano na janela móvel', () => {
+    expect(isoDaysAgo(30, new Date(2026, 0, 10, 9))).toBe('2025-12-12')
+    expect(isoDaysAgo(120, new Date(2026, 0, 10, 9))).toBe('2025-09-13')
   })
 })

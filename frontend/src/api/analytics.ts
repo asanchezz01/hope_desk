@@ -81,7 +81,8 @@ export interface AnalyticsActivityRow {
 
 export interface AnalyticsResponse {
   periodLabel: string
-  bucketMode: 'day' | 'month'
+  /** 'day' = dia do mês (visão mensal); 'date' = aaaa-mm-dd (janela móvel). */
+  bucketMode: 'day' | 'date' | 'month'
   buckets: AnalyticsBucket[]
   selectedYear: number | null
   selectedMonth: number | null
@@ -112,6 +113,8 @@ export interface AnalyticsParams {
   year?: number
   month?: number
   allPeriods?: boolean
+  /** Janela móvel de N dias corridos terminando hoje. Vence ano/mês/allPeriods. */
+  lastDays?: number
 }
 
 function toQueryString(params: Record<string, unknown>): string {

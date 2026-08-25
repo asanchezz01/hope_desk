@@ -76,6 +76,8 @@ export interface PaginatedTickets {
 export interface ListTicketsParams {
   year?: number
   month?: number
+  /** Janela móvel de N dias corridos terminando hoje. Vence ano/mês/allPeriods. */
+  lastDays?: number
   status?: TicketStatusFilter
   /** Ignora o período e busca em todo o histórico. */
   allPeriods?: boolean

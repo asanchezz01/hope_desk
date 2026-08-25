@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#0c4e9a",
+      "backgroundColor": "#07111f",
       "image": "./assets/splash.png",
       "resizeMode": "contain"
     },
@@ -21,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0c4e9a",
+        "backgroundColor": "#07111f",
         "foregroundImage": "./assets/icon.png"
       },
       "package": "br.com.hopedesk"

@@ -104,9 +104,36 @@ export interface PublicCompanyParameters {
   companyAddress: string
   companyLogo: string
   companyLogoDark: string
+  /** Texto ao lado da logo no cabeçalho. Vazio = só a logo. */
+  headerTitle: string
 }
 
-export interface CompanyParameters extends PublicCompanyParameters {
+/** Marca legível SEM token — o que as telas de autenticação precisam. */
+export interface Branding {
+  headerTitle: string
+}
+
+/**
+ * Identidade visual da empresa. Os mesmos cinco degraus alimentam a interface e
+ * o cabeçalho dos relatórios PDF — ver `visual_*_color` em
+ * `backend/src/common/domain/legacy-enums.ts`.
+ */
+export interface BrandColors {
+  /** Verde da marca: ações, destaques e o cabeçalho do PDF. */
+  primaryColor: string
+  /** Azul-noite de apoio: subtítulo e metadados no PDF. */
+  secondaryColor: string
+  /** Âmbar de destaque: o filete abaixo do cabeçalho do PDF. */
+  accentColor: string
+  /** Azul de informação. Usado na interface. */
+  infoColor: string
+  /** Vermelho de alerta. Usado na interface. */
+  dangerColor: string
+}
+
+export interface CompanyParameters extends PublicCompanyParameters, BrandColors {
+  /** Logo exclusiva dos relatórios PDF. */
+  reportLogo: string
   /** String, não número: gravado com 2 casas, como `f"{value:.2f}"` do legado. */
   monthlyHoursAllowance: string
   /** Valor cobrado por hora no relatório de atividades. */
@@ -115,7 +142,9 @@ export interface CompanyParameters extends PublicCompanyParameters {
   hoursBankClosingDate: string
 }
 
-export interface UpdateParametersInput {
+export interface UpdateParametersInput extends Partial<BrandColors> {
+  /** Vazio é uma escolha: deixa só a logo, sem texto ao lado. */
+  headerTitle?: string
   companyName?: string
   companyAddress?: string
   // A logo é tratada por upload (`uploadLogo`/`removeLogo`), não por texto.
@@ -136,6 +165,7 @@ export interface UploadLogoInput {
 export interface UploadLogoResult {
   companyLogo?: string
   companyLogoDark?: string
+  reportLogo?: string
   size: number
   contentType: string
 }
@@ -143,6 +173,7 @@ export interface UploadLogoResult {
 export interface RemoveLogoResult {
   companyLogo?: string
   companyLogoDark?: string
+  reportLogo?: string
 }
 
 /**
@@ -152,10 +183,14 @@ export interface RemoveLogoResult {
  */
 export const publicLogoUrl = `${API_URL}/parameters/logo`
 export const publicDarkLogoUrl = `${API_URL}/parameters/logo/dark`
+export const publicReportLogoUrl = `${API_URL}/parameters/logo/report`
 
 export const parametersApi = {
   /** Nome, endereço e logo — liberado a qualquer autenticado. */
   publicParameters: () => request<PublicCompanyParameters>('/parameters/public'),
+
+  /** Texto ao lado da logo. Público: o cabeçalho existe antes do login. */
+  branding: () => request<Branding>('/parameters/branding'),
 
   /** Inclui franquia e data de fechamento; exige superuser. */
   get: () => request<CompanyParameters>('/parameters'),
@@ -171,11 +206,18 @@ export const parametersApi = {
   uploadDarkLogo: (input: UploadLogoInput) =>
     request<UploadLogoResult>('/parameters/logo/dark', { method: 'POST', body: input }),
 
+  /** Envia a logo usada exclusivamente nos relatórios PDF. */
+  uploadReportLogo: (input: UploadLogoInput) =>
+    request<UploadLogoResult>('/parameters/logo/report', { method: 'POST', body: input }),
+
   /** Remove a logo da empresa (superuser). */
   removeLogo: () => request<RemoveLogoResult>('/parameters/logo', { method: 'DELETE' }),
 
   /** Remove somente a variante do tema escuro (superuser). */
   removeDarkLogo: () => request<RemoveLogoResult>('/parameters/logo/dark', { method: 'DELETE' }),
+
+  /** Remove somente a logo exclusiva dos relatórios PDF. */
+  removeReportLogo: () => request<RemoveLogoResult>('/parameters/logo/report', { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------

@@ -33,8 +33,6 @@ import {
 } from '../../../src/hooks/useActivities'
 import { useChangeTicketStatus, useDeleteTicket, useTicket } from '../../../src/hooks/useTickets'
 import AppShell from '../../../src/layout/AppShell'
-import { navItemsFor } from '../../../src/layout/nav-items'
-import { useBreakpoint } from '../../../src/layout/useBreakpoint'
 import { useTheme } from '../../../src/theme/ThemeContext'
 
 export default function TicketDetail() {
@@ -42,9 +40,6 @@ export default function TicketDetail() {
   const router = useRouter()
   const toast = useToast()
   const { user } = useAuth()
-  // O mesmo limiar da grade de chamados (1180), e não o de desktop (1024): a
-  // 1024 as duas colunas encolhem abaixo do que o cartão de detalhe comporta.
-  const twoColumns = useBreakpoint().gridColumns > 1
   const params = useLocalSearchParams<{ id: string }>()
 
   const ticketId = Number(params.id)
@@ -90,7 +85,7 @@ export default function TicketDetail() {
 
   if (!validId) {
     return (
-      <AppShell title="Chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Chamado">
         <EmptyState
           title="Chamado inválido"
           description="O endereço acessado não corresponde a um chamado."
@@ -103,7 +98,7 @@ export default function TicketDetail() {
 
   if (ticket.isLoading) {
     return (
-      <AppShell title="Chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Chamado">
         <Card>
           <Skeleton height={22} width="60%" />
           <View style={styles.skeletonGap} />
@@ -119,7 +114,7 @@ export default function TicketDetail() {
     // A API devolve 404 (não 403) para chamado de outro cliente, de propósito.
     // A UI segue a mesma linha: nada aqui sugere que o chamado existe.
     return (
-      <AppShell title="Chamado" navItems={navItemsFor(user)}>
+      <AppShell title="Chamado">
         <ErrorState error={ticket.error} onRetry={() => void ticket.refetch()} />
       </AppShell>
     )
@@ -162,12 +157,11 @@ export default function TicketDetail() {
   }
 
   return (
-    <AppShell title={`Chamado #${data.id}`} navItems={navItemsFor(user)}>
-      {/* Em tela larga o detalhe fica à esquerda e as atividades à direita: em
-          coluna única a lista de atividades empurrava os dados do chamado para
-          fora da tela, e era preciso rolar de volta para conferir o cliente. */}
-      <View style={[styles.stack, twoColumns && styles.columns]}>
-        <Card style={twoColumns ? styles.columnAside : undefined}>
+    <AppShell title={`Chamado #${data.id}`}>
+      {/* As informações são o primeiro bloco de leitura; Atividades vem em
+          seguida, também em largura total, para acomodar conteúdo variável. */}
+      <View style={styles.stack}>
+        <Card>
           <View style={styles.headerRow}>
             <StatusBadge status={data.status} label={data.statusLabel} />
             <Text style={[styles.created, { color: theme.muted }]}>
@@ -243,7 +237,7 @@ export default function TicketDetail() {
           )}
         </Card>
 
-        <Card style={twoColumns ? styles.columnMain : undefined}>
+        <Card>
           <View style={styles.sectionHeader}>
             <Text
               accessibilityRole="header"
@@ -409,14 +403,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   fact: { gap: 2, flexGrow: 1, flexBasis: 180, minWidth: 0 },
-  // `alignItems: flex-start` de propósito: sem isto as duas colunas ficariam
-  // com a mesma altura e o cartão do detalhe teria um vão em branco no fim.
-  // O `gap` do AppShell separava os dois cartões; agora eles têm um pai
-  // próprio, e o espaçamento tem de vir daqui — inclusive no celular.
+  // O pai próprio preserva a separação entre os dois blocos em toda largura.
   stack: { gap: 16 },
-  columns: { flexDirection: 'row', alignItems: 'flex-start' },
-  columnAside: { flexGrow: 1, flexBasis: 380, minWidth: 0 },
-  columnMain: { flexGrow: 2, flexBasis: 520, minWidth: 0 },
   factLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   factValue: { fontSize: 15 },
   factHint: { fontSize: 12 },

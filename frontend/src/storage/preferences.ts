@@ -3,6 +3,8 @@
 // ganho, e no Web ele nem existe.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+import { isPeriodValue } from '../domain/periods'
+
 const THEME_MODE_KEY = 'hope-desk.theme-mode'
 
 export type StoredThemeMode = 'light' | 'dark' | 'system'
@@ -42,7 +44,8 @@ const TICKET_FILTERS_KEY = 'hope-desk.ticket-filters'
  * escolhas de contexto de trabalho, que é o que vale a pena preservar.
  */
 export interface StoredTicketFilters {
-  /** `0` é o sentinela de "todo o período" usado pelo seletor. */
+  /** Valor do seletor de período: ano, `0` (todo o histórico) ou negativo
+   *  (janela móvel). Ver `domain/periods.ts`. */
   year: number
   month: number
   status: string
@@ -67,7 +70,9 @@ export function parseTicketFilters(raw: string | null): StoredTicketFilters | nu
   if (parsed === null || typeof parsed !== 'object') return null
   const { year, month, status } = parsed as Record<string, unknown>
 
-  if (typeof year !== 'number' || !Number.isInteger(year)) return null
+  // `isPeriodValue` recusa uma janela móvel que não existe mais (um `-45`
+  // gravado por outra versão viraria `lastDays=45`, e a API responde 400).
+  if (typeof year !== 'number' || !isPeriodValue(year)) return null
   if (typeof month !== 'number' || !Number.isInteger(month) || month < 1 || month > 12) return null
   if (typeof status !== 'string' || status.length === 0) return null
 

@@ -13,13 +13,18 @@ import Skeleton from '../src/components/Skeleton'
 import StatTile from '../src/components/StatTile'
 import StatusBadge from '../src/components/StatusBadge'
 import { useToast } from '../src/components/Toast'
-import { useAuth } from '../src/context/AuthProvider'
-import { firstDayOfMonthIso, formatDecimal, formatHours, todayIsoDate } from '../src/domain/format'
+import {
+  firstDayOfMonthIso,
+  formatDecimal,
+  formatHours,
+  isoDaysAgo,
+  todayIsoDate,
+} from '../src/domain/format'
 import { MONTHS_PT } from '../src/domain/months'
+import { LAST_DAYS_CHOICES } from '../src/domain/periods'
 import { statusKeyFromRaw } from '../src/domain/ticket-status'
 import { useActivityReport, useReportPdf, useServicesReport } from '../src/hooks/useReports'
 import AppShell from '../src/layout/AppShell'
-import { navItemsFor } from '../src/layout/nav-items'
 import { useBreakpoint } from '../src/layout/useBreakpoint'
 import { useIsDark, useTheme } from '../src/theme/ThemeContext'
 import { statusChartColor } from '../src/theme/chart-palette'
@@ -27,7 +32,6 @@ import { statusChartColor } from '../src/theme/chart-palette'
 type Tab = 'activities' | 'services'
 
 export default function Reports() {
-  const { user } = useAuth()
   const { isMobile } = useBreakpoint()
   const toast = useToast()
   const theme = useTheme()
@@ -74,8 +78,11 @@ export default function Reports() {
   }))
 
   return (
-    <AppShell title="Relatórios" navItems={navItemsFor(user)} width="wide">
-      <Card accent={theme.primary}>
+    <AppShell title="Relatórios">
+      {/* Mesma forma do cartão de filtros dos chamados: recorte em cima, ação
+          no rodapé, separada por um filete. Sem a aresta colorida — nenhum
+          outro cartão de filtro da retaguarda tem uma. */}
+      <Card>
         <View accessibilityRole="tablist" style={styles.tabs}>
           <TabButton
             label="Atividades por período"
@@ -89,13 +96,54 @@ export default function Reports() {
           />
         </View>
 
+        {/* Atalhos de janela móvel. Só na aba de atividades: o demonstrativo é
+            MENSAL por definição — "últimos 90 dias" não é um mês, e o PDF sai
+            com o cabeçalho de um mês só. */}
+        {tab === 'activities' && (
+          <View style={styles.quickRanges}>
+            <Text style={[styles.quickLabel, { color: theme.muted }]}>Atalhos</Text>
+            {LAST_DAYS_CHOICES.map((days) => {
+              const rangeStart = isoDaysAgo(days)
+              const selected = start === rangeStart && end === todayIsoDate()
+              return (
+                <Pressable
+                  key={days}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`Últimos ${days} dias`}
+                  onPress={() => {
+                    setStart(rangeStart)
+                    setEnd(todayIsoDate())
+                  }}
+                  style={[
+                    styles.quickChip,
+                    {
+                      borderColor: selected ? theme.primary : theme.border,
+                      backgroundColor: selected ? theme.primarySoft : 'transparent',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.quickChipLabel,
+                      { color: selected ? theme.onPrimarySoft : theme.textSecondary },
+                    ]}
+                  >
+                    {days} dias
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        )}
+
         <View style={[styles.filters, !isMobile && styles.filtersWide]}>
           {tab === 'activities' ? (
             <>
-              <View style={!isMobile ? styles.filterField : undefined}>
+              <View style={!isMobile ? styles.dateField : undefined}>
                 <DateField label="Início" value={start} onChange={setStart} />
               </View>
-              <View style={!isMobile ? styles.filterField : undefined}>
+              <View style={!isMobile ? styles.dateField : undefined}>
                 {/* O legado trata a data final como INCLUSIVA; dizer isso evita
                     a dúvida de "preciso pôr o dia seguinte?". */}
                 <DateField
@@ -108,10 +156,10 @@ export default function Reports() {
             </>
           ) : (
             <>
-              <View style={!isMobile ? styles.filterField : undefined}>
+              <View style={!isMobile ? styles.yearField : undefined}>
                 <Select label="Ano" value={year} options={yearOptions} onChange={setYear} />
               </View>
-              <View style={!isMobile ? styles.filterField : undefined}>
+              <View style={!isMobile ? styles.monthField : undefined}>
                 <Select
                   label="Mês"
                   value={month}
@@ -123,13 +171,16 @@ export default function Reports() {
           )}
         </View>
 
-        <View style={styles.actions}>
-          <Button
-            title={pdf.isPending ? 'Gerando…' : 'Baixar PDF'}
-            icon="file-pdf"
-            onPress={() => void downloadPdf()}
-            loading={pdf.isPending}
-          />
+        <View style={[styles.filterActions, { borderTopColor: theme.border }]}>
+          <View style={isMobile ? styles.actionCell : undefined}>
+            <Button
+              title={pdf.isPending ? 'Gerando…' : 'Baixar PDF'}
+              icon="file-pdf"
+              onPress={() => void downloadPdf()}
+              loading={pdf.isPending}
+              full={isMobile}
+            />
+          </View>
         </View>
       </Card>
 
@@ -160,7 +211,7 @@ function TabButton({
       style={[
         styles.tab,
         { borderColor: selected ? theme.primary : theme.border },
-        selected && { backgroundColor: theme.background },
+        selected && { backgroundColor: theme.primarySoft },
       ]}
     >
       <Text
@@ -371,13 +422,42 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 13 },
   tabLabelSelected: { fontWeight: '700' },
-  filters: { gap: 0 },
+  quickRanges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  quickChip: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 999,
+  },
+  quickChipLabel: { fontSize: 13, fontWeight: '600' },
+  // Cada campo traz `marginBottom: 16` próprio; no último isso vira vão morto
+  // até o filete das ações. Mesma correção do cartão de filtros dos chamados.
+  filters: { gap: 0, marginBottom: -16 },
   filtersWide: { flexDirection: 'row', gap: 12 },
-  // Só vale na LINHA: num contêiner em coluna (celular) `flexBasis` é
-  // ALTURA, e cada campo viraria uma caixa dessa altura. Por isso o
-  // estilo é aplicado condicionalmente, como em `analytics`.
-  filterField: { flexGrow: 1, flexBasis: 180, minWidth: 0, maxWidth: 300 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end' },
+  // Só valem na LINHA: num contêiner em coluna (celular) `flexBasis` é
+  // ALTURA, e cada campo viraria uma caixa dessa altura. Datas pedem mais
+  // espaço; ano e mês ficam proporcionais ao próprio conteúdo.
+  dateField: { flexGrow: 0, flexBasis: 180, minWidth: 0 },
+  yearField: { flexGrow: 0, flexBasis: 112, minWidth: 0 },
+  monthField: { flexGrow: 0, flexBasis: 144, minWidth: 0 },
+  filterActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  actionCell: { flexGrow: 1, flexBasis: 150, minWidth: 0 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
   ticketHeader: {

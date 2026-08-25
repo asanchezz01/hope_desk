@@ -19,6 +19,15 @@ export interface ReportCompanyHeader {
   companyName: string;
   companyAddress: string;
   companyLogo: string;
+  colors: ReportBrandColors;
+}
+
+export interface ReportBrandColors {
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  infoColor: string;
+  dangerColor: string;
 }
 
 export interface ActivityReportActivityRow {
@@ -325,14 +334,20 @@ export class ReportsService {
     const values = await this.parameters.getMany([
       'company_name',
       'company_address',
-      'company_logo',
+      'report_logo',
+      'visual_primary_color',
+      'visual_secondary_color',
+      'visual_accent_color',
+      'visual_info_color',
+      'visual_danger_color',
     ]);
     return {
       companyName: values.company_name,
       companyAddress: values.company_address,
-      // Resolve o nome do arquivo (gravado pelo upload) dentro da pasta de
-      // logos para pdfkit abrir o caminho local; URL/caminho inexistente -> ''.
-      companyLogo: this.parameters.resolveLogoPath(values.company_logo) ?? '',
+      // A marca impressa é independente das logos da interface. Resolve o
+      // arquivo local para o pdfkit; URL/caminho inexistente vira ''.
+      companyLogo: this.parameters.resolveLogoPath(values.report_logo) ?? '',
+      colors: this.reportColors(values),
     };
   }
 
@@ -343,16 +358,32 @@ export class ReportsService {
     const values = await this.parameters.getMany([
       'company_name',
       'company_address',
-      'company_logo',
+      'report_logo',
+      'visual_primary_color',
+      'visual_secondary_color',
+      'visual_accent_color',
+      'visual_info_color',
+      'visual_danger_color',
       'activity_hourly_rate',
     ]);
     return {
       company: {
         companyName: values.company_name,
         companyAddress: values.company_address,
-        companyLogo: this.parameters.resolveLogoPath(values.company_logo) ?? '',
+        companyLogo: this.parameters.resolveLogoPath(values.report_logo) ?? '',
+        colors: this.reportColors(values),
       },
       hourlyRate: resolveConfiguredHourlyRate(values.activity_hourly_rate),
+    };
+  }
+
+  private reportColors(values: Record<string, string>): ReportBrandColors {
+    return {
+      primaryColor: values.visual_primary_color,
+      secondaryColor: values.visual_secondary_color,
+      accentColor: values.visual_accent_color,
+      infoColor: values.visual_info_color,
+      dangerColor: values.visual_danger_color,
     };
   }
 

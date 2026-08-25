@@ -75,9 +75,9 @@ export function buildInsights(data: AnalyticsResponse): Insight[] {
         parts: [
           {
             text:
-              data.bucketMode === 'day'
-                ? 'O pico de aberturas foi em '
-                : 'O mês de maior abertura foi ',
+              data.bucketMode === 'month'
+                ? 'O mês de maior abertura foi '
+                : 'O pico de aberturas foi em ',
           },
           { text: bucketLabel, emphasis: true },
           { text: ', com ' },

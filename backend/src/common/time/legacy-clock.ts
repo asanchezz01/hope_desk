@@ -207,6 +207,31 @@ export function monthPeriodBounds(year: number, month: number): [Date, Date] {
   return [start, end];
 }
 
+/**
+ * Janela móvel de `days` dias CORRIDOS terminando agora.
+ *
+ * O início é ancorado à meia-noite, não ao horário exato de N dias atrás: com
+ * "últimos 30 dias" a pessoa espera 30 caixinhas de dia inteiro no gráfico, e
+ * uma janela que começasse às 14h37 de 30 dias atrás produziria 31, sendo a
+ * primeira e a última pela metade. Hoje conta como um dos N dias.
+ *
+ * `now` precisa vir no MESMO espaço em que as datas serão comparadas — tanto em
+ * `analytics` quanto em `tickets` isso é o espaço de parede de
+ * `instantToWallClockStorage`, o mesmo de `monthPeriodBounds`.
+ */
+export function lastDaysBounds(now: Date, days: number): [Date, Date] {
+  const parts = storageToWallClock(now);
+  const startOfToday = wallClockToStorage({
+    ...parts,
+    hour: 0,
+    minute: 0,
+    second: 0,
+    millisecond: 0,
+  });
+  const start = new Date(startOfToday.getTime() - (days - 1) * 86_400_000);
+  return [start, now];
+}
+
 /** Início do mês seguinte ao de um valor armazenado. Usado para fatiar por mês. */
 export function startOfNextMonth(stored: Date): Date {
   const { year, month } = storageToWallClock(stored);

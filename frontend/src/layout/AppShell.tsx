@@ -1,42 +1,43 @@
-// Shell adaptativo (Fase 08).
+// Moldura das telas autenticadas, no padrão da retaguarda NewHope.
 //
-// Uma única árvore serve mobile, tablet e Web: a partir do tablet a navegação
-// vira uma coluna fixa à esquerda.
+// Uma única árvore serve celular, tablet e Web:
 //
-// **No celular ela não existe** — e por muito tempo não existiu nada no lugar,
-// o que prendia quem entrava pelo telefone na primeira tela. O menu completo
-// (`AppMenu`), com o gatilho sanduíche no cabeçalho, é a navegação de verdade:
-// aparece em qualquer largura e carrega a lista inteira, como no legado.
-import { FontAwesome6 } from '@expo/vector-icons'
-import { usePathname, useRouter } from 'expo-router'
+//   a partir do tablet  coluna de navegação fixa à esquerda, e NADA no topo —
+//                       o título da tela mora no `PageHeader`, dentro do
+//                       conteúdo, porque uma faixa de topo só rouba altura de
+//                       lista quando a coluna já diz onde a pessoa está;
+//   no celular          a mesma coluna vira gaveta, aberta pelo sanduíche da
+//                       barra de topo.
+//
+// Antes havia duas navegações concorrentes (a coluna com quatro atalhos e um
+// menu sanduíche com a lista inteira, os dois visíveis no desktop). Agora é uma
+// só, completa nas duas larguras — ver `nav-items.ts`.
+import { usePathname } from 'expo-router'
 import React, { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import CompanyLogo from '../components/CompanyLogo'
-import ThemeToggle from '../components/ThemeToggle'
+import PageHeader from '../components/PageHeader'
 import { useAuth } from '../context/AuthProvider'
 import { useCompanyLogo } from '../hooks/useCompanyLogo'
+import { useHeaderTitle } from '../hooks/useHeaderTitle'
 import { useTheme } from '../theme/ThemeContext'
-import { Typography } from '../theme/tokens'
 
 import AppMenu, { AppMenuTrigger } from './AppMenu'
+import SidebarNav, { SIDEBAR_WIDTH } from './SidebarNav'
 import { menuItemsFor } from './nav-items'
 import { useBreakpoint } from './useBreakpoint'
 
-export interface NavItem {
-  href: string
-  label: string
-  /** Nome do glyph no FontAwesome6 (estilo solid). */
-  icon: React.ComponentProps<typeof FontAwesome6>['name']
-  /** Ocultar quando o perfil não puder usar. Não é autorização — a API decide. */
-  visible?: boolean
-}
+export type { NavItem } from './nav-items'
 
 interface AppShellProps {
   children: React.ReactNode
   title: string
-  navItems?: NavItem[]
+  /** Linha de apoio sob o título, quando a tela tem o que explicar. */
+  subtitle?: string
+  /** Ação principal da tela, no canto direito do cabeçalho. */
+  action?: React.ReactNode
   /**
    * Desliga o ScrollView interno. Telas com lista própria (`FlatList`) precisam
    * disso: uma lista virtualizada dentro de um ScrollView perde a
@@ -46,69 +47,83 @@ interface AppShellProps {
   /**
    * Quanto da tela o conteúdo pode ocupar.
    *
-   *   'wide'    telas em GRADE (painel): as colunas preenchem a largura extra;
-   *   'default' listas e leitura corrida — o teto de sempre;
-   *   'form'    coluna única: alargar só afasta o rótulo do valor.
+   *   'full'  PADRÃO da retaguarda: sem teto, o conteúdo vai até a borda. É o
+   *           `xl:max-w-none` do HopeSell — numa retaguarda cheia de tabela e
+   *           grade, cada pixel a mais é coluna visível, e um teto centralizado
+   *           ainda faz a borda esquerda saltar de lugar entre telas;
+   *   'form'  coluna única. A ÚNICA exceção, e só para formulário de digitação
+   *           corrida: um campo de texto de 1600px não é melhor que um de 760 —
+   *           o olho perde o começo da linha ao voltar.
+   *
+   * Não há mais teto intermediário. Existiam dois ('default' 1120 e 'wide'
+   * 1360) e a diferença entre eles só produzia telas irmãs desalinhadas.
    */
-  width?: 'default' | 'wide' | 'form'
+  width?: 'full' | 'form'
 }
 
 export default function AppShell({
   children,
   title,
-  navItems = [],
+  subtitle,
+  action,
   scroll = true,
-  width = 'default',
+  width = 'full',
 }: AppShellProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
-  const { hasSideNav, contentMaxWidth, wideMaxWidth, formMaxWidth } = useBreakpoint()
-  const maxWidth =
-    width === 'form' ? formMaxWidth : width === 'wide' ? wideMaxWidth : contentMaxWidth
+  const { hasSideNav, formMaxWidth } = useBreakpoint()
+  const maxWidth = width === 'form' ? formMaxWidth : undefined
   const { user, signOut } = useAuth()
   const logoUrl = useCompanyLogo()
-
-  const items = navItems.filter((item) => item.visible !== false)
+  const headerTitle = useHeaderTitle()
+  const pathname = usePathname()
 
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const menuItems = menuItemsFor(user)
-  const roleLabel = user ? (user.role === 'client' ? 'Cliente' : 'Técnico') : undefined
+  // O ícone do cabeçalho é o mesmo do item de menu correspondente: a tela e o
+  // caminho que leva até ela usam o mesmo símbolo, e nenhuma tela precisa
+  // repetir essa escolha.
+  const icon = menuItemsFor(user).find((item) => item.href === pathname)?.icon
+
+  const cabecalho = <PageHeader title={title} subtitle={subtitle} icon={icon} action={action} />
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <View style={styles.brandRow}>
-          <CompanyLogo size={34} imageWidth={112} src={logoUrl} />
-          <View
-            accessible={false}
-            testID="page-title-separator"
-            style={[styles.titleSeparator, { backgroundColor: theme.muted }]}
-          />
-          <Text
-            accessibilityRole="header"
-            numberOfLines={1}
-            style={[styles.title, { color: theme.textPrimary }]}
-          >
-            {title}
-          </Text>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {hasSideNav && (
+        <View
+          style={[
+            styles.aside,
+            {
+              backgroundColor: theme.surfaceNav,
+              borderRightColor: theme.border,
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+            },
+          ]}
+        >
+          <SidebarNav user={user} onSignOut={() => void signOut()} />
         </View>
+      )}
 
-        <View style={styles.headerActions}>
-          <ThemeToggle />
-          {user && <AppMenuTrigger onPress={() => setMenuOpen(true)} />}
-        </View>
-      </View>
-
-      <View style={styles.body}>
-        {hasSideNav && items.length > 0 && (
+      <View style={styles.main}>
+        {!hasSideNav && (
           <View
-            accessibilityRole="menubar"
-            style={[styles.sideNav, { borderRightColor: theme.border }]}
+            style={[
+              styles.topBar,
+              {
+                backgroundColor: theme.surfaceNav,
+                borderBottomColor: theme.border,
+                paddingTop: insets.top + 10,
+              },
+            ]}
           >
-            {items.map((item) => (
-              <SideNavLink key={item.href} href={item.href} label={item.label} icon={item.icon} />
-            ))}
+            {user && <AppMenuTrigger onPress={() => setMenuOpen(true)} />}
+            <CompanyLogo size={30} imageWidth={96} src={logoUrl} />
+            {headerTitle !== '' && (
+              <Text numberOfLines={1} style={[styles.topBrand, { color: theme.textPrimary }]}>
+                {headerTitle}
+              </Text>
+            )}
           </View>
         )}
 
@@ -117,9 +132,10 @@ export default function AppShell({
             style={styles.content}
             contentContainerStyle={[
               styles.contentInner,
-              { paddingBottom: insets.bottom + 24, maxWidth },
+              { paddingBottom: insets.bottom + 32, maxWidth },
             ]}
           >
+            {cabecalho}
             {children}
           </ScrollView>
         ) : (
@@ -127,20 +143,21 @@ export default function AppShell({
              coluna lateral): quem traz lista própria (FlatList) precisa do
              contorno BOUNDED para rolar. O recorte de largura + centralização
              mora no container do próprio conteúdo, que é quem conhece o eixo.
-             `alignSelf: center` aqui estaria errado: `body` é `row`, e em row
-             o `alignSelf` rege o eixo VERTICAL e ainda encolhe a caixa ao
-             conteúdo — a FlatList ficava sem altura e quebrava com itens. */
-          <View style={styles.content}>{children}</View>
+             `alignSelf: center` aqui estaria errado: `main` é `column`, mas
+             `content` é o pai da lista e encolher a caixa ao conteúdo deixaria
+             a FlatList sem altura. */
+          <View style={styles.content}>
+            <View style={[styles.headerOutside, { maxWidth }]}>{cabecalho}</View>
+            {children}
+          </View>
         )}
       </View>
 
-      {user && (
+      {user && !hasSideNav && (
         <AppMenu
-          items={menuItems}
           open={menuOpen}
           onOpenChange={setMenuOpen}
-          userName={user.name}
-          userRole={roleLabel}
+          user={user}
           onSignOut={() => void signOut()}
         />
       )}
@@ -148,88 +165,30 @@ export default function AppShell({
   )
 }
 
-function SideNavLink({
-  href,
-  label,
-  icon,
-}: {
-  href: string
-  label: string
-  icon: NavItem['icon']
-}) {
-  const theme = useTheme()
-  const router = useRouter()
-  const pathname = usePathname()
-  const active = pathname === href
-
-  return (
-    <Pressable
-      accessibilityRole="menuitem"
-      accessibilityState={{ selected: active }}
-      onPress={() => router.push(href as never)}
-      style={[styles.navLink, active && { backgroundColor: theme.cardBg }]}
-    >
-      <View
-        style={[styles.navMarker, { backgroundColor: active ? theme.primary : 'transparent' }]}
-      />
-      <FontAwesome6
-        name={icon}
-        size={14}
-        color={active ? theme.textPrimary : theme.textSecondary}
-      />
-      <Text
-        style={[
-          styles.navLabel,
-          { color: active ? theme.textPrimary : theme.textSecondary },
-          active && styles.navLabelActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  )
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  header: {
+  root: { flex: 1, flexDirection: 'row' },
+  aside: { width: SIDEBAR_WIDTH, flexShrink: 0, borderRightWidth: 1 },
+  main: { flex: 1, minWidth: 0 },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
-  titleSeparator: { width: 1, height: 20, flexShrink: 0 },
-  title: { ...Typography.screenTitle, flexShrink: 1, minWidth: 0 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  signOut: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  signOutLabel: { fontSize: 13, fontWeight: '600' },
-  body: { flex: 1, flexDirection: 'row' },
-  sideNav: { width: 216, paddingVertical: 12, paddingHorizontal: 8, borderRightWidth: 1, gap: 2 },
-  navLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 40,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  navMarker: { width: 3, height: 18, borderRadius: 2 },
-  navLabel: { fontSize: 14 },
-  navLabelActive: { fontWeight: '700' },
+  topBrand: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, flexShrink: 1, minWidth: 0 },
   content: { flex: 1 },
   // `contentInner` vive no contentContainerStyle de um ScrollView: lá a caixa
   // é um item de uma coluna, então `alignSelf: center` centraliza no eixo
   // HORIZONTAL — o recorte de leitura que queremos. Reutilize no container de
   // conteúdo de qualquer lista própria (`FlatList` da tela de chamados).
-  contentInner: { padding: 16, gap: 16, width: '100%', alignSelf: 'center' },
+  contentInner: { padding: 20, paddingTop: 24, gap: 20, width: '100%', alignSelf: 'center' },
+  headerOutside: {
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 4,
+  },
 })

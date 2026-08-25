@@ -3,7 +3,8 @@ import React from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
 
-import { useTheme } from '../../theme/ThemeContext'
+import { useIsDark, useTheme } from '../../theme/ThemeContext'
+import { Radius, Shadows, Typography } from '../../theme/tokens'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger'
 
@@ -38,6 +39,7 @@ export default function Button({
   accessibilityLabel,
 }: ButtonProps) {
   const theme = useTheme()
+  const isDark = useIsDark()
   const inactive = disabled || loading
 
   // `onAccentText` acompanha o tema: no claro os preenchimentos são escuros e o
@@ -65,7 +67,13 @@ export default function Button({
     },
   }[variant]
 
-  const shape: ViewStyle = { backgroundColor: background, borderColor }
+  // A sombra verde sob a acao primaria e do padrao da retaguarda, e so no tema
+  // claro: sobre a noite ela some visualmente e ainda suja a borda do botao.
+  const shape: ViewStyle = {
+    backgroundColor: background,
+    borderColor,
+    ...(variant === 'primary' && !isDark && !inactive ? Shadows.acao : null),
+  }
 
   return (
     <Pressable
@@ -102,8 +110,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
   },
   content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -111,5 +119,5 @@ const styles = StyleSheet.create({
   full: { alignSelf: 'stretch' },
   pressed: { opacity: 0.85 },
   inactive: { opacity: 0.5 },
-  text: { fontSize: 16, fontWeight: '600' },
+  text: { ...Typography.label, fontWeight: '600' },
 })

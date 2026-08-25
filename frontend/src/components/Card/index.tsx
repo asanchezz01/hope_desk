@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
+import { Radius, Shadows } from '../../theme/tokens'
 
 interface CardProps {
   children: React.ReactNode
@@ -38,19 +39,17 @@ export default function Card({ children, style, padding = true, accent }: CardPr
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: 12,
-    // A borda é o que separa o card do fundo nos dois temas; a sombra é só um
-    // reforço no claro, e some visualmente no escuro sem prejuízo.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    // `rounded-xl` do padrão: controle 12, cartão 16, contêiner 20–24.
+    borderRadius: Radius.xl,
+    // A borda é o que separa o cartão do fundo nos dois temas; a sombra é só um
+    // reforço no claro, e some visualmente no escuro sem prejuízo. Ela é
+    // tingida de azul-noite, nunca de preto puro.
+    ...Shadows.card,
   },
   // Só quando há acento: a faixa é posicionada na aresta e precisa ser
-  // recortada pelo raio de 12px. Condiciona-se para não alterar o render dos
+  // recortada pelo raio do cartão. Condiciona-se para não alterar o render dos
   // demais cards, que ainda dependem de conteúdo absoluto no card.
   cardAccent: { overflow: 'hidden' },
   accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  padded: { padding: 16 },
+  padded: { padding: 20 },
 })

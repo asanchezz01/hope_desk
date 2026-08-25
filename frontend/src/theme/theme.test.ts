@@ -1,15 +1,15 @@
 /**
  * Contraste do tema (WCAG 2.1 AA).
  *
- * A Fase 08 pede "acessibilidade básica e contraste". Contraste é verificável,
- * então é teste — não inspeção visual. O alvo é 4,5:1 para texto normal e 3:1
- * para elementos gráficos e texto grande.
+ * Contraste é verificável, então é teste — não inspeção visual. O alvo é 4,5:1
+ * para texto normal e 3:1 para elementos gráficos e texto grande.
  *
- * Estes números são o motivo de `palette` (cores canônicas do legado) ser
- * separado das variantes de uso: #0c4e9a sobre o fundo escuro dá 1,9:1, e
- * #ffcc00 sobre branco dá 1,6:1. As duas seriam ilegíveis como cor de texto.
+ * Estes números são o motivo de cada papel ter um degrau POR TEMA em vez de uma
+ * cor só: `brand-700` sobre a noite dá ~2,4:1 e `brand-400` sobre o papel dá
+ * ~1,9:1. Nenhum dos dois serve nos dois modos.
  */
-import { darkTheme, lightTheme, LEGACY_PALETTE, type ThemeColors } from './ThemeContext'
+import { darkTheme, lightTheme, type ThemeColors } from './ThemeContext'
+import { brand, slate } from './tokens'
 
 function channel(value: number): number {
   const c = value / 255
@@ -50,11 +50,11 @@ describe('contraste', () => {
     ['escuro', darkTheme],
   ]
 
-  it('as duas paletas da logo mantêm contraste AA nos respectivos temas', () => {
-    expect(contrast('#0c4e9a', lightTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
-    expect(contrast('#234783', lightTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
-    expect(contrast('#f3f4f6', darkTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
-    expect(contrast('#6aa9e9', darkTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
+  it('o verde da marca mantém contraste AA no degrau de cada tema', () => {
+    expect(contrast(brand[700], lightTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast(brand[700], lightTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast(brand[400], darkTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
+    expect(contrast(brand[400], darkTheme.cardBg)).toBeGreaterThanOrEqual(AA_TEXT)
   })
 
   describe.each(themes)('tema %s', (_name, theme) => {
@@ -88,29 +88,33 @@ describe('contraste', () => {
   })
 })
 
-describe('identidade visual', () => {
-  it('preserva as cinco cores do legado, iguais nos dois temas', () => {
-    const legado = {
-      primary: '#0c4e9a',
-      secondary: '#234783',
-      accent: '#ffcc00',
-      danger: '#d92120',
-      success: '#1f9d55',
-    }
-    expect(LEGACY_PALETTE).toEqual(legado)
-    expect(lightTheme.palette).toEqual(legado)
-    expect(darkTheme.palette).toEqual(legado)
+describe('identidade visual da retaguarda NewHope', () => {
+  // Este bloco é o contrato da padronização: a retaguarda do HopeDesk usa a
+  // MESMA paleta da retaguarda do HopeSell. Se um destes valores mudar sem que
+  // `HopeSell/packages/shared/tailwind-preset.js` tenha mudado junto, os dois
+  // produtos deixaram de combinar.
+  it('usa o verde-esperança e o neutro azulado do preset compartilhado', () => {
+    expect(brand[700]).toBe('#0d7f57')
+    expect(brand[400]).toBe('#57d6a1')
+    expect(slate[950]).toBe('#07111f')
+    expect(slate[900]).toBe('#0c192a')
+    expect(slate[200]).toBe('#dce5ec')
   })
 
-  it('usa a cor canônica direto no tema claro', () => {
-    expect(lightTheme.primary).toBe(LEGACY_PALETTE.primary)
-    expect(lightTheme.danger).toBe(LEGACY_PALETTE.danger)
+  it('a noite do escuro é o azul-noite comum ao HopeCash e ao HopeNoc', () => {
+    expect(darkTheme.background).toBe(slate[950])
+    expect(darkTheme.cardBg).toBe(slate[900])
   })
 
-  it('documenta por que o escuro não pode usar a cor canônica como texto', () => {
-    // Se algum dia isto passar de 4,5, a variante clareada deixou de ser
-    // necessária e o tema escuro pode voltar à cor canônica.
-    expect(contrast(LEGACY_PALETTE.primary, darkTheme.background)).toBeLessThan(AA_TEXT)
+  it('a ação é o verde da marca, no degrau de cada tema', () => {
+    expect(lightTheme.primary).toBe(brand[700])
+    expect(darkTheme.primary).toBe(brand[400])
+  })
+
+  it('documenta por que o escuro não pode reusar o degrau do claro', () => {
+    // Se algum dia isto passar de 4,5, o degrau clareado deixou de ser
+    // necessário e o tema escuro pode voltar ao `brand-700`.
+    expect(contrast(brand[700], darkTheme.background)).toBeLessThan(AA_TEXT)
     expect(contrast(darkTheme.primary, darkTheme.background)).toBeGreaterThanOrEqual(AA_TEXT)
   })
 })

@@ -53,7 +53,7 @@ export default function BarList({
   const [hovered, setHovered] = useState<string | null>(null)
 
   if (items.length === 0) {
-    return <EmptyState title="Nada a exibir" description={emptyMessage} />
+    return <EmptyState bare title="Nada a exibir" description={emptyMessage} />
   }
 
   const sorted = [...items].sort((a, b) => b.value - a.value)

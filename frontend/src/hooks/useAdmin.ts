@@ -141,17 +141,23 @@ export function useUpdateCompanyParameters() {
   })
 }
 
-export function useUploadCompanyLogo(variant: 'light' | 'dark' = 'light') {
+export function useUploadCompanyLogo(variant: 'light' | 'dark' | 'report' = 'light') {
   return useMutation({
-    mutationFn: (input: UploadLogoInput) =>
-      variant === 'dark' ? parametersApi.uploadDarkLogo(input) : parametersApi.uploadLogo(input),
+    mutationFn: (input: UploadLogoInput) => {
+      if (variant === 'dark') return parametersApi.uploadDarkLogo(input)
+      if (variant === 'report') return parametersApi.uploadReportLogo(input)
+      return parametersApi.uploadLogo(input)
+    },
   })
 }
 
-export function useRemoveCompanyLogo(variant: 'light' | 'dark' = 'light') {
+export function useRemoveCompanyLogo(variant: 'light' | 'dark' | 'report' = 'light') {
   return useMutation({
-    mutationFn: () =>
-      variant === 'dark' ? parametersApi.removeDarkLogo() : parametersApi.removeLogo(),
+    mutationFn: () => {
+      if (variant === 'dark') return parametersApi.removeDarkLogo()
+      if (variant === 'report') return parametersApi.removeReportLogo()
+      return parametersApi.removeLogo()
+    },
   })
 }
 

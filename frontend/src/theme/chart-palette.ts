@@ -3,8 +3,9 @@
 // Duas famílias de cor com regras DIFERENTES convivem no painel:
 //
 // 1. STATUS (aberto / em andamento / concluído / fechado). São cores de ESTADO,
-//    não de identidade arbitrária, e vêm do legado — as mesmas que a API devolve
-//    em `statusMeta`. Reutilizá-las para "série 4" de qualquer outro gráfico é
+//    não de identidade arbitrária, e vêm das escalas semânticas do preset
+//    compartilhado da retaguarda NewHope — as mesmas que a API devolve em
+//    `statusMeta`. Reutilizá-las para "série 4" de qualquer outro gráfico é
 //    proibido: elas significam uma coisa específica.
 //
 // 2. MAGNITUDE (por módulo, técnico, cliente, tendência de 12 meses). São uma
@@ -13,55 +14,45 @@
 //    já carrega a informação, e gastar a cor nela deixa o gráfico sem canal
 //    livre — além de sugerir uma identidade que essas categorias não têm.
 //
-// ## Validação da paleta (`scripts/validate_palette.js` do skill de dataviz)
+// ## Contraste contra a superfície do cartão
 //
-// STATUS no claro — superfície #ffffff, cores canônicas do legado:
-//   PASS separação CVD .......... pior par ΔE 20,7 (protan) · 21,4 (tritan)
-//   PASS piso de visão normal ... pior par ΔE 29,7
-//   PASS piso de croma
-//   FAIL banda de luminância .... #ffcc00 (0,865) e #234783 (0,405) fora
-//   WARN contraste .............. #ffcc00 a 1,51:1
+// STATUS no claro — superfície #ffffff, os degraus 600/700 das escalas:
+//   #b03a3a 5,98:1 · #a2600b 4,98:1 · #0d7f57 5,01:1 · #1f5fe0 5,57:1.
+//   Todos acima dos 3:1 exigidos de elemento gráfico. Foi o principal ganho da
+//   padronização: o âmbar do produto antigo (#ffcc00) ficava em 1,5:1.
 //
-// STATUS no escuro — superfície #1e293b. As canônicas REPROVAM aqui:
-//   #234783 fica em 1,60:1 e #d92120 em 2,92:1 contra o card escuro, ou seja,
-//   a fatia "fechado" praticamente desaparecia no tema escuro. Por isso o
-//   escuro usa degraus mais claros DAS MESMAS hues — vermelho continua
-//   vermelho, azul continua azul; muda o degrau, não a identidade:
-//     #ef6b63 · #ffcc00 · #22a866 · #6aa9e9
-//   PASS separação CVD .......... pior par ΔE 17,5 (deutan) · 6,8 (tritan)
-//   PASS piso de visão normal ... pior par ΔE 20,7
-//   PASS contraste .............. as 4 acima de 3:1
-//   FAIL banda de luminância .... inerente a paleta de status
+// STATUS no escuro — superfície #0c192a. Os degraus do claro NÃO servem aqui
+//   (#b03a3a cai para 2,96:1, e a fatia "aberto" some). Por isso o escuro usa o
+//   degrau 400 DAS MESMAS hues — vermelho continua vermelho, azul continua
+//   azul; muda o degrau, não o significado:
+//     #fb7185 6,57:1 · #fbbf24 10,59:1 · #34d399 9,20:1 · #38bdf8 8,25:1.
 //
-// Duas ressalvas que NÃO são descartáveis:
-//
-// - O tritan de 6,8 cai na faixa 6–8, que só é legal COM codificação
-//   secundária. Ela existe: todo gráfico de status neste painel mostra rótulo
-//   e contagem ao lado do segmento, e a tabela de chamados repete tudo em
-//   texto. Nenhuma informação depende só da cor.
-// - O aviso de contraste no claro obriga o mesmo alívio por rótulo visível.
-//
-// A banda de luminância é critério de uniformidade de paleta CATEGÓRICA, e
-// estas são cores de status herdadas: achatá-las quebraria a paridade com o
-// `statusMeta` da API e com a lista de chamados.
+// A banda de luminância de uma paleta CATEGÓRICA não fecha, e não deveria: são
+// quatro estados com peso semântico diferente, e achatá-los quebraria a
+// paridade com o `statusMeta` da API e com a lista de chamados. A compensação
+// obrigatória é a mesma de sempre e não é descartável: **todo gráfico de status
+// mostra rótulo e contagem ao lado do segmento**, e a tabela de chamados repete
+// tudo em texto. Nenhuma informação depende só da cor — o que também cobre quem
+// não distingue vermelho de verde.
 //
 // MAGNITUDE:
-//   #0c4e9a (claro) e #4f93d9 (escuro) — croma e contraste passam no seu modo.
-//   `#0c4e9a` no escuro daria 2,13:1 contra a superfície, e por isso não é
-//   reaproveitada lá.
+//   #0d7f57 (claro) e #34d399 (escuro) — o verde da marca, no degrau que cada
+//   superfície aguenta. `#0d7f57` sobre #0c192a daria 2,7:1, e por isso não é
+//   reaproveitado lá.
 import { TICKET_STATUS_META, type TicketStatus } from '../domain/ticket-status'
 
 /**
  * Degraus de status para o tema escuro.
  *
- * Mesmas hues das canônicas, um degrau acima em claridade. Existe porque as
- * canônicas reprovam em contraste contra `#1e293b` — ver a nota acima.
+ * Mesmas hues do claro, um degrau acima em claridade (o 400 das escalas).
+ * Existe porque os degraus do claro reprovam em contraste contra `#0c192a` —
+ * ver a nota acima.
  */
 const DARK_STATUS_COLORS: Record<TicketStatus, string> = {
-  aberto: '#ef6b63',
-  em_andamento: '#ffcc00',
-  resolvido: '#22a866',
-  fechado: '#6aa9e9',
+  aberto: '#fb7185', // red-400
+  em_andamento: '#fbbf24', // amber-400
+  resolvido: '#34d399', // green-400
+  fechado: '#38bdf8', // blue-400
 }
 
 /**
@@ -75,7 +66,7 @@ export function statusChartColor(status: string, isDark = false): string {
   if (isDark && status in DARK_STATUS_COLORS) {
     return DARK_STATUS_COLORS[status as TicketStatus]
   }
-  return (TICKET_STATUS_META as Record<string, { color: string }>)[status]?.color ?? '#6b7280'
+  return (TICKET_STATUS_META as Record<string, { color: string }>)[status]?.color ?? '#576d84'
 }
 
 /** Ordem fixa dos status nos gráficos — nunca reordenada por grandeza. */

@@ -3,6 +3,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import type { KeyboardTypeOptions, TextInputProps } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
+import { Radius, Typography } from '../../theme/tokens'
 
 interface InputProps {
   label?: string
@@ -105,16 +106,17 @@ export default function Input({
 
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 6 },
+  label: { ...Typography.label, marginBottom: 6 },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderRadius: 8,
+    // `rounded-lg` do padrão vale 12px, não os 8px de fábrica do Tailwind.
+    borderRadius: Radius.lg,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: 15,
   },
   disabled: { opacity: 0.6 },
-  error: { marginTop: 4, fontSize: 12, fontWeight: '600' },
-  hint: { marginTop: 4, fontSize: 12 },
+  error: { marginTop: 6, fontSize: 12, fontWeight: '600' },
+  hint: { marginTop: 6, fontSize: 12 },
 })

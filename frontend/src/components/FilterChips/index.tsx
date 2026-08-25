@@ -43,7 +43,7 @@ export default function FilterChips({ chips, onRemove, onClearAll }: FilterChips
           onPress={() => onRemove(chip.key)}
           style={[
             styles.chip,
-            { backgroundColor: theme.chartTrack, borderColor: theme.chartMagnitude },
+            { backgroundColor: theme.primarySoft, borderColor: theme.primary },
           ]}
         >
           <Text style={[styles.chipDimension, { color: theme.muted }]}>{chip.dimension}</Text>

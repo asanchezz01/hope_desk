@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { useTheme } from '../../theme/ThemeContext'
+import { Radius, Typography } from '../../theme/tokens'
 
 export interface SelectOption<T> {
   value: T
@@ -115,7 +116,10 @@ export default function Select<T extends string | number>({
                         onChange(item.value)
                         setOpen(false)
                       }}
-                      style={[styles.option, isSelected && { backgroundColor: theme.background }]}
+                      style={[
+                        styles.option,
+                        isSelected && { backgroundColor: theme.primarySoft },
+                      ]}
                     >
                       <View style={styles.optionText}>
                         <Text style={[styles.optionLabel, { color: theme.textPrimary }]}>
@@ -142,7 +146,7 @@ export default function Select<T extends string | number>({
 
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 6 },
+  label: { ...Typography.label, marginBottom: 6 },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,10 +155,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.lg,
   },
   disabled: { opacity: 0.6 },
-  value: { flex: 1, fontSize: 16 },
+  value: { flex: 1, fontSize: 15 },
   chevron: { fontSize: 14 },
   error: { marginTop: 4, fontSize: 12, fontWeight: '600' },
   overlay: {
@@ -162,14 +166,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(12,25,42,0.5)',
   },
   sheet: {
     width: '100%',
     maxWidth: 440,
     maxHeight: '70%',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: Radius['2xl'],
     borderWidth: 1,
   },
   sheetTitle: { fontSize: 17, fontWeight: '700', marginBottom: 8 },
@@ -181,7 +185,7 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 48,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: Radius.lg,
   },
   optionText: { flex: 1 },
   optionLabel: { fontSize: 15 },

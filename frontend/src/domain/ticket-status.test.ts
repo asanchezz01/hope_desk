@@ -19,16 +19,16 @@ describe('domínio de status', () => {
     // Divergir aqui faria a lista de chamados e o gráfico de status mostrarem
     // cores diferentes para o mesmo estado.
     expect(TICKET_STATUS_META).toEqual({
-      aberto: { label: 'Em aberto', color: '#d92120' },
-      em_andamento: { label: 'Em andamento', color: '#ffcc00' },
-      resolvido: { label: 'Concluído', color: '#1f9d55' },
-      fechado: { label: 'Fechado', color: '#234783' },
+      aberto: { label: 'Em aberto', color: '#b03a3a' },
+      em_andamento: { label: 'Em andamento', color: '#a2600b' },
+      resolvido: { label: 'Concluído', color: '#0d7f57' },
+      fechado: { label: 'Fechado', color: '#1f5fe0' },
     })
   })
 
   it('devolve um cinza neutro para status fora do domínio', () => {
-    expect(statusColor('aberto')).toBe('#d92120')
-    expect(statusColor('inexistente')).toBe('#6b7280')
+    expect(statusColor('aberto')).toBe('#b03a3a')
+    expect(statusColor('inexistente')).toBe('#576d84')
   })
 
   it('reconhece apenas os quatro status do domínio', () => {

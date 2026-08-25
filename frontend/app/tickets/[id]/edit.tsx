@@ -20,7 +20,6 @@ import { TICKET_STATUSES } from '../../../src/domain/ticket-status'
 import { useActiveModules, useClients, useTechnicians } from '../../../src/hooks/useCatalog'
 import { useTicket, useUpdateTicket } from '../../../src/hooks/useTickets'
 import AppShell from '../../../src/layout/AppShell'
-import { navItemsFor } from '../../../src/layout/nav-items'
 import { useTheme } from '../../../src/theme/ThemeContext'
 
 /** Valor do Select para "sem técnico designado" — a API recebe `null`. */
@@ -85,7 +84,7 @@ export default function EditTicket() {
 
   if (!validId) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Editar chamado" width="form">
         <EmptyState
           title="Chamado inválido"
           description="O endereço acessado não corresponde a um chamado."
@@ -99,7 +98,7 @@ export default function EditTicket() {
   if (user && !canEditTicket(user)) {
     // Esconder a tela é conveniência; a API recusaria o PATCH de qualquer forma.
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Editar chamado" width="form">
         <EmptyState
           title="Sem permissão"
           description="Apenas técnicos podem editar chamados."
@@ -112,7 +111,7 @@ export default function EditTicket() {
 
   if (ticket.isLoading) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Editar chamado" width="form">
         <Card>
           <Skeleton height={20} width="50%" />
           <View style={styles.gap} />
@@ -124,7 +123,7 @@ export default function EditTicket() {
 
   if (ticket.isError || !ticket.data) {
     return (
-      <AppShell title="Editar chamado" navItems={navItemsFor(user)} width="form">
+      <AppShell title="Editar chamado" width="form">
         <ErrorState error={ticket.error} onRetry={() => void ticket.refetch()} />
       </AppShell>
     )
@@ -166,7 +165,7 @@ export default function EditTicket() {
   }
 
   return (
-    <AppShell title={`Editar chamado #${ticketId}`} navItems={navItemsFor(user)} width="form">
+    <AppShell title={`Editar chamado #${ticketId}`} width="form">
       <Card>
         <Input
           label="Título"

@@ -20,14 +20,13 @@ import {
   useToggleModule,
 } from '../../src/hooks/useAdmin'
 import AppShell from '../../src/layout/AppShell'
-import { navItemsFor } from '../../src/layout/nav-items'
 import { useBreakpoint } from '../../src/layout/useBreakpoint'
 import { useTheme } from '../../src/theme/ThemeContext'
 
 export default function AdminModules() {
   const theme = useTheme()
   const toast = useToast()
-  const { user, isSuperuser } = useAuth()
+  const { isSuperuser } = useAuth()
   const { isMobile } = useBreakpoint()
 
   const [name, setName] = useState('')
@@ -41,7 +40,7 @@ export default function AdminModules() {
 
   if (!isSuperuser) {
     return (
-      <AppShell title="Módulos" navItems={navItemsFor(user)}>
+      <AppShell title="Módulos">
         <Card>
           <EmptyState
             title="Sem permissão"
@@ -95,7 +94,7 @@ export default function AdminModules() {
   const modules: SystemModule[] = list.data?.items ?? []
 
   return (
-    <AppShell title="Módulos do sistema" navItems={navItemsFor(user)}>
+    <AppShell title="Módulos do sistema">
       <Card>
         {/* Campo e botão na mesma linha no desktop: um input de largura inteira
             com o botão sozinho embaixo desperdiça a linha e afasta a ação do

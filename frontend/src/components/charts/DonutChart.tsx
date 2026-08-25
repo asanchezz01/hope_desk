@@ -60,7 +60,7 @@ export default function DonutChart({
   const progress = useReveal(`${total}-${slices.map((s) => s.value).join(',')}`)
 
   if (total === 0) {
-    return <EmptyState title="Nada a exibir" description={emptyMessage} />
+    return <EmptyState bare title="Nada a exibir" description={emptyMessage} />
   }
 
   let cursor = 0
@@ -125,8 +125,8 @@ export default function DonutChart({
       </View>
 
       {/* A legenda É o controle: cada linha tem alvo grande, foco de teclado e
-          traz contagem e percentual em texto — a leitura não depende da cor,
-          que é a compensação obrigatória do aviso de contraste do #ffcc00. */}
+          traz contagem e percentual em texto — a leitura nunca depende só da
+          cor, que é a compensação obrigatória de uma paleta de estado. */}
       <View style={styles.legend}>
         {slices.map((slice) => {
           const selected = selectedKey === slice.key
