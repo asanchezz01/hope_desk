@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
+import { maskOnAppend } from '../../domain/format'
 import {
   formatWallClockForApi,
   formatWallClockLabel,
@@ -54,10 +55,10 @@ export default function DateTimeField({
   }, [value])
 
   function handleChange(raw: string) {
-    const masked = maskBrDateTime(raw)
-    setText(masked)
+    const next = maskOnAppend(text, raw, maskBrDateTime)
+    setText(next)
 
-    const parts = parseBrLabel(masked)
+    const parts = parseBrLabel(next)
     onChange(parts ? formatWallClockForApi(parts) : '')
   }
 

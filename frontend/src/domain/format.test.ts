@@ -7,6 +7,7 @@ import {
   formatPercent,
   isoDaysAgo,
   maskBrDate,
+  maskOnAppend,
   parseBrDateToIso,
   todayIsoDate,
 } from './format'
@@ -89,5 +90,24 @@ describe('datas puras', () => {
   it('atravessa a virada do ano na janela móvel', () => {
     expect(isoDaysAgo(30, new Date(2026, 0, 10, 9))).toBe('2025-12-12')
     expect(isoDaysAgo(120, new Date(2026, 0, 10, 9))).toBe('2025-09-13')
+  })
+})
+
+describe('maskOnAppend', () => {
+  it('mascara enquanto se digita no fim', () => {
+    expect(maskOnAppend('', '1', maskBrDate)).toBe('1')
+    expect(maskOnAppend('10/03', '10/032', maskBrDate)).toBe('10/03/2')
+    expect(maskOnAppend('', '10032026', maskBrDate)).toBe('10/03/2026')
+  })
+
+  it('não reescreve edição no meio nem apagamento', () => {
+    // Trocar a hora de 14 para 10 em "01/09/2026 14:23": apagar e digitar.
+    expect(maskOnAppend('01/09/2026 14:23', '01/09/2026 1:23', maskBrDate)).toBe('01/09/2026 1:23')
+    expect(maskOnAppend('01/09/2026 1:23', '01/09/2026 10:23', maskBrDate)).toBe('01/09/2026 10:23')
+    expect(maskOnAppend('10/03/2026', '10/03/202', maskBrDate)).toBe('10/03/202')
+  })
+
+  it('descarta caracteres fora da máscara', () => {
+    expect(maskOnAppend('10/03/2026', '10/03/2026abc', maskBrDate)).toBe('10/03/2026')
   })
 })

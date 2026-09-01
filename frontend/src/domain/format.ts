@@ -58,6 +58,26 @@ export function maskBrDate(raw: string): string {
 }
 
 /**
+ * Aplica a máscara só quando se digita NO FIM do campo.
+ *
+ * Máscaras posicionais reconstroem o texto a partir da sequência de dígitos.
+ * Isso funciona enquanto se acrescenta ao final, mas embaralha qualquer edição
+ * no meio — trocar `14:23` por `10:23` num campo já preenchido reescrevia o
+ * valor e ainda jogava o cursor para o fim, o que na prática impedia digitar o
+ * horário. Fora do caso "acrescentou ao final", o texto passa como veio e a
+ * validação fica por conta de quem for interpretá-lo.
+ */
+export function maskOnAppend(
+  previous: string,
+  raw: string,
+  mask: (raw: string) => string,
+): string {
+  const clean = raw.replace(/[^\d/: ]/g, '')
+  const appended = clean.length > previous.length && clean.startsWith(previous)
+  return appended ? mask(clean) : clean
+}
+
+/**
  * `dd/mm/aaaa` → `AAAA-MM-DD`, ou `null` se incompleto/inválido.
  *
  * As datas de relatório e de pagamento são DATAS PURAS: sem hora e sem fuso.

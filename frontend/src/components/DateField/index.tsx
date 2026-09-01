@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-import { formatIsoDate, maskBrDate, parseBrDateToIso } from '../../domain/format'
+import { formatIsoDate, maskBrDate, maskOnAppend, parseBrDateToIso } from '../../domain/format'
 import Input from '../Input'
 
 interface DateFieldProps {
@@ -37,9 +37,9 @@ export default function DateField({
   }, [value])
 
   function handleChange(raw: string) {
-    const masked = maskBrDate(raw)
-    setText(masked)
-    onChange(parseBrDateToIso(masked) ?? '')
+    const next = maskOnAppend(text, raw, maskBrDate)
+    setText(next)
+    onChange(parseBrDateToIso(next) ?? '')
   }
 
   return (
