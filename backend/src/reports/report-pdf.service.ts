@@ -140,7 +140,7 @@ export class ReportPdfService {
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor(colors.primary)
-        .text(`Chamado #${ticket.ticketId} — ${ticket.title}`);
+        .text(`Chamado Nro ${ticket.ticketId} — ${ticket.title}`);
 
       document
         .font('Helvetica')
@@ -171,7 +171,7 @@ export class ReportPdfService {
           columns,
           activity,
           zebra,
-          `Chamado #${ticket.ticketId} — ${ticket.title}`,
+          `Chamado Nro ${ticket.ticketId} — ${ticket.title}`,
         );
         zebra = !zebra;
       }
@@ -192,9 +192,10 @@ export class ReportPdfService {
       document.fontSize(11).fillColor(colors.primary).text('Totais por técnico');
       document.moveDown(0.3);
 
+      const horasWidth = 90;
       const columns = [
-        { header: 'Técnico', width: 300 },
-        { header: 'Horas', width: 90, align: 'right' as const },
+        { header: 'Técnico', width: this.contentWidth(document) - horasWidth },
+        { header: 'Horas', width: horasWidth, align: 'right' as const },
       ];
       this.drawTableHeader(document, columns);
 
@@ -644,46 +645,46 @@ export class ReportPdfService {
     document.x = document.page.margins.left;
   }
 
+  /**
+   * Fecho do relatório, na mesma pauta de "Totais por técnico": título, faixa
+   * de cabeçalho e linha de dados ocupando a largura útil. O valor da hora saiu
+   * do papel — é parâmetro de cobrança, não resultado do período; o que o
+   * leitor precisa conferir é a hora somada e o quanto ela dá.
+   */
   private drawActivityReportSummary(
     document: PDFKit.PDFDocument,
     report: ActivityReport,
   ): void {
     const colors = this.colorsFor(document);
-    const width = 270;
-    const height = 72;
-    this.ensureSpace(document, height + 12);
+    this.ensureSpace(document, 80);
     document.moveDown(0.8);
 
-    const left = document.page.width - document.page.margins.right - width;
-    const top = document.y;
-    document.roundedRect(left, top, width, height, 6).fillColor(colors.summary).fill();
+    document.font('Helvetica').fontSize(11).fillColor(colors.primary).text('Horas Trabalhadas');
+    document.moveDown(0.3);
 
-    const labelX = left + 12;
-    const valueWidth = 120;
-    const valueX = left + width - valueWidth - 12;
-    const rows = [
-      ['Horas trabalhadas', `${report.totalHours.toFixed(2).replace('.', ',')} h`],
-      ['Valor da hora', formatCurrency(report.hourlyRate)],
-      ['Valor devido', formatCurrency(report.amountDue)],
-    ];
+    const valorWidth = 130;
+    const columns = [
+      { header: 'Total de horas', width: this.contentWidth(document) - valorWidth },
+      { header: 'Valor devido', width: valorWidth, align: 'right' as const },
+    ] satisfies TableColumn[];
 
-    rows.forEach(([label, value], index) => {
-      const y = top + 10 + index * 19;
-      const isTotal = index === rows.length - 1;
-      document
-        .font(isTotal ? 'Helvetica-Bold' : 'Helvetica')
-        .fontSize(isTotal ? 10.5 : 9)
-        .fillColor(isTotal ? colors.primary : colors.text)
-        .text(label, labelX, y, { width: width - valueWidth - 30, lineBreak: false });
-      document.text(value, valueX, y, {
-        width: valueWidth,
-        align: 'right',
-        lineBreak: false,
-      });
-    });
+    this.drawTableHeader(document, columns);
+    this.drawTableRow(
+      document,
+      columns,
+      [
+        `${report.totalHours.toFixed(2).replace('.', ',')} h`,
+        formatCurrency(report.amountDue),
+      ],
+      false,
+    );
 
-    document.y = top + height;
     document.x = document.page.margins.left;
+  }
+
+  /** Largura útil da página, entre as margens. */
+  private contentWidth(document: PDFKit.PDFDocument): number {
+    return document.page.width - document.page.margins.left - document.page.margins.right;
   }
 
   private fitSingleLineFontSize(

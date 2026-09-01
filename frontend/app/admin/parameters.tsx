@@ -215,10 +215,10 @@ export default function AdminParameters() {
           setLogoUrls((current) => ({ ...current, [variant]: nextUrl }))
           toast.show(
             variant === 'dark'
-              ? 'Logo do modo escuro atualizada.'
+              ? 'Logo do sistema (modo escuro) atualizada.'
               : variant === 'report'
-                ? 'Logo dos relatórios PDF atualizada.'
-                : 'Logo do modo claro atualizada.',
+                ? 'Logo da empresa atualizada.'
+                : 'Logo do sistema (modo claro) atualizada.',
             'success'
           )
         },
@@ -240,10 +240,10 @@ export default function AdminParameters() {
         if (variant !== 'report') refreshCompanyLogo(variant)
         toast.show(
           variant === 'dark'
-            ? 'Logo do modo escuro removida.'
+            ? 'Logo do sistema (modo escuro) removida.'
             : variant === 'report'
-              ? 'Logo dos relatórios PDF removida.'
-              : 'Logo do modo claro removida.',
+              ? 'Logo da empresa removida.'
+              : 'Logo do sistema (modo claro) removida.',
           'success'
         )
       },
@@ -296,7 +296,7 @@ export default function AdminParameters() {
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Identidade visual</Text>
         <LogoField
-          label="Logo do modo claro"
+          label="Logo do sistema (modo claro)"
           currentUrl={logoUrls.light}
           previewBackgroundColor="#ffffff"
           onUpload={
@@ -308,7 +308,7 @@ export default function AdminParameters() {
         />
         <View style={[styles.logoDivider, { backgroundColor: theme.border }]} />
         <LogoField
-          label="Modo escuro"
+          label="Logo do sistema (modo escuro)"
           currentUrl={logoUrls.dark}
           previewBackgroundColor="#111827"
           onUpload={
@@ -327,7 +327,7 @@ export default function AdminParameters() {
 
         <Text style={[styles.subsectionTitle, { color: theme.textPrimary }]}>Relatórios PDF</Text>
         <LogoField
-          label="Logo dos relatórios PDF"
+          label="Logo da empresa"
           currentUrl={logoUrls.report}
           previewBackgroundColor="#ffffff"
           onUpload={
@@ -338,7 +338,7 @@ export default function AdminParameters() {
           removeBusy={removeReportLogo.isPending}
         />
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
-          Usada exclusivamente nos relatórios PDF. Ela não altera as logos exibidas na aplicação.
+          Usada no cabeçalho dos relatórios PDF. Ela não altera as logos do sistema.
         </Text>
 
         <View style={[styles.logoDivider, { backgroundColor: theme.border }]} />
@@ -425,14 +425,14 @@ export default function AdminParameters() {
         visible={pendingRemove !== null}
         title={
           pendingRemove === 'report'
-            ? 'Remover a logo dos relatórios PDF?'
-            : `Remover a logo do modo ${pendingRemove === 'dark' ? 'escuro' : 'claro'}?`
+            ? 'Remover a logo da empresa?'
+            : `Remover a logo do sistema (modo ${pendingRemove === 'dark' ? 'escuro' : 'claro'})?`
         }
         description={
           pendingRemove === 'dark'
             ? 'A interface escura voltará a exibir a marca padrão.'
             : pendingRemove === 'report'
-              ? 'Os relatórios PDF deixarão de exibir esta logo.'
+              ? 'Os relatórios PDF deixarão de exibir a logo da empresa.'
               : 'A interface clara voltará a exibir a marca padrão.'
         }
         confirmLabel="Remover"
