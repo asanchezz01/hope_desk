@@ -659,7 +659,11 @@ export class ReportPdfService {
     this.ensureSpace(document, 80);
     document.moveDown(0.8);
 
-    document.font('Helvetica').fontSize(11).fillColor(colors.primary).text('Horas Trabalhadas');
+    document
+      .font('Helvetica')
+      .fontSize(11)
+      .fillColor(colors.primary)
+      .text('Horas Trabalhadas');
     document.moveDown(0.3);
 
     const valorWidth = 130;
@@ -684,7 +688,9 @@ export class ReportPdfService {
 
   /** Largura útil da página, entre as margens. */
   private contentWidth(document: PDFKit.PDFDocument): number {
-    return document.page.width - document.page.margins.left - document.page.margins.right;
+    return (
+      document.page.width - document.page.margins.left - document.page.margins.right
+    );
   }
 
   private fitSingleLineFontSize(
