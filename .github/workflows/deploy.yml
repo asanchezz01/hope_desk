@@ -1,8 +1,8 @@
 # Deploy em produção (VPS).
 #
-# Dispara a cada push em `main` — e SÓ depois de as validações rápidas do CI
-# passarem. Os testes de integração continuam no CI normal do mesmo push, mas
-# não bloqueiam este fluxo de deploy.
+# Dispara a cada push em `main`. O CI continua rodando em workflow separado,
+# enquanto este fluxo se limita a publicar e verificar a aplicação. Os builds
+# das imagens já validam a compilação do backend e o bundle Web do frontend.
 #
 # `workflow_dispatch` fica disponível para repetir um deploy sem novo commit
 # (por exemplo, depois de mexer no `.env` da VPS) e para publicar a partir de
@@ -42,14 +42,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-    with:
-      skip_integration_tests: true
-
   deploy:
     name: Publicar na VPS
-    needs: ci
     # O runner instalado em /opt/actions-runner, como serviço, usuário `gha`.
     runs-on: [self-hosted, hopedesk-vps]
     timeout-minutes: 20

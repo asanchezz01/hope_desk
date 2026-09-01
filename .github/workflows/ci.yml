@@ -1,24 +1,16 @@
 # Verificação de todo push e de todo pull request.
 #
-# O deploy reutiliza este workflow sem os testes de integração. Em pushes e
-# pull requests normais, a suíte completa continua sendo executada.
+# Este workflow valida pushes e pull requests. O deploy é independente: as
+# imagens de produção já repetem os builds necessários antes de subir a stack.
 name: CI
 
 on:
   push:
     branches: [main, v2]
   pull_request:
-  workflow_call:
-    inputs:
-      skip_integration_tests:
-        description: Pula PostgreSQL, migrations e E2E no caminho de deploy
-        type: boolean
-        default: false
 
 concurrency:
-  # O push dispara o CI completo e o deploy chama a versão rápida. Grupos
-  # distintos impedem que um cancele o outro.
-  group: ci-${{ github.ref }}-${{ inputs.skip_integration_tests && 'deploy' || 'full' }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -56,7 +48,6 @@ jobs:
 
   backend-integration:
     name: Backend (integração)
-    if: ${{ !inputs.skip_integration_tests }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

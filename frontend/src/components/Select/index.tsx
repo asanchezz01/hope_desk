@@ -116,10 +116,7 @@ export default function Select<T extends string | number>({
                         onChange(item.value)
                         setOpen(false)
                       }}
-                      style={[
-                        styles.option,
-                        isSelected && { backgroundColor: theme.primarySoft },
-                      ]}
+                      style={[styles.option, isSelected && { backgroundColor: theme.primarySoft }]}
                     >
                       <View style={styles.optionText}>
                         <Text style={[styles.optionLabel, { color: theme.textPrimary }]}>

@@ -77,10 +77,7 @@ export function AppMenuTrigger({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="Abrir menu de navegação"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.trigger,
-        pressed && { backgroundColor: theme.surfaceMuted },
-      ]}
+      style={({ pressed }) => [styles.trigger, pressed && { backgroundColor: theme.surfaceMuted }]}
     >
       <FontAwesome6 name="bars" size={16} color={theme.textSecondary} />
     </Pressable>
