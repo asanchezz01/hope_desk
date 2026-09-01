@@ -59,8 +59,7 @@ export default function ColorField({
               value: amostra,
               disabled,
               'aria-label': label,
-              onChange: (event: { target: { value: string } }) =>
-                onChange(event.target.value),
+              onChange: (event: { target: { value: string } }) => onChange(event.target.value),
               // O controle nativo cobre a amostra inteira e fica invisível: o
               // que se vê é o quadrado colorido, e o clique cai no seletor.
               style: {

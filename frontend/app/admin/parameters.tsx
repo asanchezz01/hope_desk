@@ -319,8 +319,8 @@ export default function AdminParameters() {
           removeBusy={removeDarkLogo.isPending}
         />
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
-          O sistema alterna automaticamente entre as versões conforme o tema ativo. PNG, JPEG,
-          WebP, GIF ou SVG, até 1MB.
+          O sistema alterna automaticamente entre as versões conforme o tema ativo. PNG, JPEG, WebP,
+          GIF ou SVG, até 1MB.
         </Text>
 
         <View style={[styles.logoDivider, { backgroundColor: theme.border }]} />
@@ -354,13 +354,11 @@ export default function AdminParameters() {
       </Card>
 
       <Card>
-        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-          Identidade visual
-        </Text>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Identidade visual</Text>
         <Text style={[styles.hint, styles.sectionHint, { color: theme.textSecondary }]}>
-          As mesmas cores valem para a interface e para o cabeçalho dos relatórios em PDF. Os
-          tons neutros do papel (texto, filete, linhas zebradas) não mudam: eles é que garantem
-          o contraste da leitura.
+          As mesmas cores valem para a interface e para o cabeçalho dos relatórios em PDF. Os tons
+          neutros do papel (texto, filete, linhas zebradas) não mudam: eles é que garantem o
+          contraste da leitura.
         </Text>
         {CAMPOS_DE_COR.map((campo) => (
           <ColorField

@@ -217,7 +217,8 @@ export const parametersApi = {
   removeDarkLogo: () => request<RemoveLogoResult>('/parameters/logo/dark', { method: 'DELETE' }),
 
   /** Remove somente a logo exclusiva dos relatórios PDF. */
-  removeReportLogo: () => request<RemoveLogoResult>('/parameters/logo/report', { method: 'DELETE' }),
+  removeReportLogo: () =>
+    request<RemoveLogoResult>('/parameters/logo/report', { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------

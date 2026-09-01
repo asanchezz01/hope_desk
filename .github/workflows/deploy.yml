@@ -1,8 +1,8 @@
 # Deploy em produção (VPS).
 #
-# Dispara a cada push em `main` — e SÓ depois de o CI passar inteiro. A ordem
-# importa: `needs: ci` faz o deploy esperar; sem isso, um push quebrado subiria
-# em produção enquanto os testes ainda rodavam.
+# Dispara a cada push em `main` — e SÓ depois de as validações rápidas do CI
+# passarem. Os testes de integração continuam no CI normal do mesmo push, mas
+# não bloqueiam este fluxo de deploy.
 #
 # `workflow_dispatch` fica disponível para repetir um deploy sem novo commit
 # (por exemplo, depois de mexer no `.env` da VPS) e para publicar a partir de
@@ -44,6 +44,8 @@ concurrency:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    with:
+      skip_integration_tests: true
 
   deploy:
     name: Publicar na VPS

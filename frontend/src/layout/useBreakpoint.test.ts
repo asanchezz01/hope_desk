@@ -38,4 +38,3 @@ describe('gridColumnsFor', () => {
     expect(gridColumnsFor(0)).toBe(1)
   })
 })
-

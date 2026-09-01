@@ -41,10 +41,7 @@ export default function FilterChips({ chips, onRemove, onClearAll }: FilterChips
           accessibilityRole="button"
           accessibilityLabel={`Remover filtro ${chip.dimension}: ${chip.value}`}
           onPress={() => onRemove(chip.key)}
-          style={[
-            styles.chip,
-            { backgroundColor: theme.primarySoft, borderColor: theme.primary },
-          ]}
+          style={[styles.chip, { backgroundColor: theme.primarySoft, borderColor: theme.primary }]}
         >
           <Text style={[styles.chipDimension, { color: theme.muted }]}>{chip.dimension}</Text>
           <Text numberOfLines={1} style={[styles.chipValue, { color: theme.textPrimary }]}>

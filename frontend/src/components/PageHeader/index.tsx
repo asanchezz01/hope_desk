@@ -36,9 +36,7 @@ export default function PageHeader({ title, subtitle, icon, action }: PageHeader
           <Text accessibilityRole="header" style={[styles.title, { color: theme.textPrimary }]}>
             {title}
           </Text>
-          {subtitle && (
-            <Text style={[styles.subtitle, { color: theme.muted }]}>{subtitle}</Text>
-          )}
+          {subtitle && <Text style={[styles.subtitle, { color: theme.muted }]}>{subtitle}</Text>}
         </View>
       </View>
       {action}
